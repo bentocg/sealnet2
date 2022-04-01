@@ -16,5 +16,6 @@ class Tiff:
             raise NotImplementedError(f'Sensor not supported for {raster_path}')
         width = src.width
         height = src.height
+        transforms = src.transform
         meta = src.meta
-        return img, width, height, meta
+        return img, width, height, transforms, meta
