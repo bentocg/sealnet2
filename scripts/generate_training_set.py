@@ -69,9 +69,9 @@ def main():
 
         # Get dataset split, catalog id and label for naming
         catalog_id = f"{scene.split('_')[2]}-{scene.split('_')[5]}"
-        labels = annotations.label.values
-        splits = annotations.dataset.values
-        label_counters = {label: 0 for label in scn_annotations.label}
+        labels = scn_annotations.label.values
+        splits = scn_annotations.dataset.values
+        label_counters = {label: 0 for label in scn_annotations.label.unique()}
 
         try:
             img, width, height, transform, meta = tiff.process_raster(
@@ -107,7 +107,7 @@ def main():
                 mask = scene_mask[
                     x - half_patch: x + half_patch, y - half_patch: y + half_patch
                 ][::-1]
-                mask = np.rot90(mask)
+                mask = np.rot90(mask, k=3)
                 window = Window(
                     col_off=x - half_patch,
                     row_off=y - half_patch,
