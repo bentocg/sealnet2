@@ -1,33 +1,26 @@
 __all__ = ["provider"]
 
 from torch.utils.data import DataLoader, WeightedRandomSampler
-import pandas as pd
-from utils.data_processing import SeaIceDataset
+from utils.data_processing import SealsDataset
 import torch
-import numpy as np
 
 
 def provider(
-    df_path,
+    annotation_ds,
     data_folder,
     phase,
-    size,
-    tsets,
+    patch_size,
     batch_size=8,
     num_workers=4,
-    segmentation=False,
     augmentation_mode="simple",
     neg_to_pos_ratio=1,
 ):
-    df = pd.read_csv(df_path)
 
-    image_dataset = SeaIceDataset(
-        df=df,
+    image_dataset = SealsDataset(
+        annotation_ds=annotation_ds,
         data_folder=data_folder,
         phase=phase,
-        tsets=tsets,
-        size=size,
-        segmentation=segmentation,
+        patch_size=patch_size,
         augmentation_mode=augmentation_mode,
     )
 
