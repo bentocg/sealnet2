@@ -7,6 +7,7 @@ import numpy as np
 import sys
 from argparse import ArgumentParser
 from rasterio.windows import Window
+from shapely.geometry import Polygon
 
 sys.path.insert(0, "..")
 from utils.data_processing import Tiff
@@ -28,7 +29,14 @@ def parse_args():
         "--patch_size",
         type=int,
         default=768,
-        help="Patch size for creating tiles",
+        help="Patch size for creating tiles.",
+    )
+    parser.add_argument(
+        "-n",
+        "--negatives_per_scene",
+        type=int,
+        default=250,
+        help="Number of negative patches per scene.",
     )
     parser.add_argument(
         "-o",
@@ -63,12 +71,20 @@ def main():
             os.makedirs(f"{args.output_dir}/{split}/{subdir}", exist_ok=True)
 
     # Loop over scenes
+    existing_negatives = []
+    curr_catalog_id = ""
     tiff = Tiff()
     for scene in scenes:
         scn_annotations = annotations.loc[annotations.scene == scene]
 
         # Get dataset split, catalog id and label for naming
-        catalog_id = f"{scene.split('_')[2]}-{scene.split('_')[5]}"
+        catalog_id = scene.split("_")[2]
+        strip_number = scene.split("_")[5]
+
+        if catalog_id != curr_catalog_id:
+            existing_negatives = []
+            curr_catalog_id = catalog_id
+        catalog_annotations = annotations.loc[annotations.catalog_id == catalog_id]
         labels = scn_annotations.label.values
         splits = scn_annotations.dataset.values
         label_counters = {label: 0 for label in scn_annotations.label.unique()}
@@ -82,13 +98,11 @@ def main():
             continue
 
         # Fill in scene mask with seal centroids
-        scene_mask = np.zeros((width, height), dtype=np.uint8)
+        scene_mask = np.zeros((height, width), dtype=np.uint8)
         xs = [point.xy[0][0] for point in scn_annotations["geometry"]]
         ys = [point.xy[1][0] for point in scn_annotations["geometry"]]
 
-        ys, xs = rasterio.transform.rowcol(
-            transform=transform, xs=xs, ys=ys
-        )  # Indexing is inverted for rasterio.
+        xs, ys = rasterio.transform.rowcol(transform=transform, xs=xs, ys=ys)
         if type(xs) == int:
             xs, ys = [xs], [ys]
         for point in zip(xs, ys):
@@ -105,12 +119,12 @@ def main():
                 # Read from scene mask and raster window
                 x, y = point
                 mask = scene_mask[
-                    x - half_patch: x + half_patch, y - half_patch: y + half_patch
-                ][::-1]
-                mask = np.rot90(mask, k=3)
+                    x - half_patch : x + half_patch, y - half_patch : y + half_patch
+                ]
+
                 window = Window(
-                    col_off=x - half_patch,
-                    row_off=y - half_patch,
+                    row_off=x - half_patch,
+                    col_off=y - half_patch,
                     width=args.patch_size,
                     height=args.patch_size,
                 )
@@ -121,11 +135,66 @@ def main():
                 # Get filename and save
                 label = labels[idx]
                 split = splits[idx]
-                filename = f"{catalog_id}_{label}_{label_counters[label]}.tif"
+                filename = (
+                    f"{catalog_id}-{strip_number}_{label}_{label_counters[label]}.tif"
+                )
 
                 cv2.imwrite(f"{args.output_dir}/{split}/x/{filename}", crop)
                 cv2.imwrite(f"{args.output_dir}/{split}/y/{filename}", mask)
                 label_counters[label] += 1
+
+            # Add negative patches
+            prev_len = len(existing_negatives)
+            while len(existing_negatives) - prev_len < args.negatives_per_scene:
+
+                # Sample x, y at random
+                x, y = np.random.randint(0, height), np.random.randint(0, width)
+                curr_point = np.array([x, y])
+
+                # Make sure the crop center is not too close to an existing negative crop
+                for point in existing_negatives:
+                    if np.linalg.norm(point - curr_point) < half_patch:
+                        continue
+
+                # Get window and ake sure the crop has non-zero content
+                window = Window(
+                    row_off=x - half_patch,
+                    col_off=y - half_patch,
+                    width=args.patch_size,
+                    height=args.patch_size,
+                )
+
+                crop = src.read(1, window=window)
+
+                # Make sure the crop has the correct shape
+                if crop.shape != (args.patch_size, args.patch_size):
+                    continue
+
+                # Make sure the crop has non-missing data
+                if np.sum(crop) == 0:
+                    continue
+
+                # Make sure the crop does not contain any annotated positives
+                crop_polygon = Polygon(
+                    [
+                        transform * ele
+                        for ele in [
+                            [y - half_patch, x - half_patch],
+                            [y + half_patch, x - half_patch],
+                            [y + half_patch, x + half_patch],
+                            [y - half_patch, x + half_patch],
+                        ]
+                    ]
+                )
+
+                if catalog_annotations.geometry.intersects(crop_polygon).max():
+                    continue
+
+                # Save file and add point to existing negatives
+                filename = f"{catalog_id}-{strip_number}_negative_" \
+                           f"{len(existing_negatives) - prev_len}.tif"
+                cv2.imwrite(f"{args.output_dir}/training/x/{filename}", crop)
+                existing_negatives.append(curr_point)
 
 
 if __name__ == "__main__":
