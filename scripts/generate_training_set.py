@@ -1,6 +1,7 @@
 import os
 
 import cv2
+import pandas as pd
 import rasterio
 import geopandas as gpd
 import numpy as np
@@ -39,6 +40,13 @@ def parse_args():
         help="Number of negative patches per scene.",
     )
     parser.add_argument(
+        "-v",
+        "--percent_val_negative",
+        type=float,
+        default=0.2,
+        help="Percent validation for negative patches",
+    )
+    parser.add_argument(
         "-o",
         "--output_dir",
         type=str,
@@ -56,6 +64,9 @@ def main():
 
     # Read annotations and keep only images with seals
     annotations = gpd.read_file(args.input_shapefile)
+
+    # Store filenames
+    annotations_df = pd.DataFrame()
 
     # Assert annotations are valid
     for col in ["scene", "label", "geometry"]:
@@ -143,6 +154,18 @@ def main():
                 cv2.imwrite(f"{args.output_dir}/{split}/y/{filename}", mask)
                 label_counters[label] += 1
 
+                # Add entry to annotation
+                annotations_df = annotations_df.append(
+                    {
+                        "label": label,
+                        "split": split,
+                        "img_name": filename,
+                        "scene": scene,
+                        "catalog_id": catalog_id,
+                    },
+                    ignore_index=True,
+                )
+
             # Add negative patches
             prev_len = len(existing_negatives)
             while len(existing_negatives) - prev_len < args.negatives_per_scene:
@@ -191,10 +214,32 @@ def main():
                     continue
 
                 # Save file and add point to existing negatives
-                filename = f"{catalog_id}-{strip_number}_negative_" \
-                           f"{len(existing_negatives) - prev_len}.tif"
-                cv2.imwrite(f"{args.output_dir}/training/x/{filename}", crop)
+                split = (
+                    "training"
+                    if np.random.rand() > args.percent_val_negative
+                    else "validation"
+                )
+                filename = (
+                    f"{catalog_id}-{strip_number}_negative_"
+                    f"{len(existing_negatives) - prev_len}.tif"
+                )
+                cv2.imwrite(f"{args.output_dir}/{split}/x/{filename}", crop)
                 existing_negatives.append(curr_point)
+
+                # Add entry to annotation df
+                annotations_df = annotations_df.append(
+                    {
+                        "label": "negative",
+                        "split": split,
+                        "img_name": filename,
+                        "scene": scene,
+                        "catalog_id": catalog_id,
+                    },
+                    ignore_index=True,
+                )
+
+    # Save annotations df
+    annotations_df.to_csv(f"{args.output_dir}/annotations_df.csv", index=False)
 
 
 if __name__ == "__main__":
