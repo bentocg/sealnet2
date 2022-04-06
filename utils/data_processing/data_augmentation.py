@@ -1,9 +1,7 @@
 __all__ = ["get_transforms"]
 
 import albumentations as A
-from albumentations.augmentations.transforms import CenterCrop, Flip, Rotate
 from albumentations.pytorch import ToTensorV2
-from torch.nn.modules import module
 
 
 def train_transform(size, mode):

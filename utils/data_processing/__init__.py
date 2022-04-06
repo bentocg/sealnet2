@@ -1,5 +1,5 @@
 from .data_augmentation import get_transforms
-from .image_datasets import SeaIceDataset, TestDataset
+from .image_datasets import SealsDataset, TestDataset
 from .dataloader import provider
 from .write_output import write_output
 from .merge_output import merge_output

@@ -1,11 +1,10 @@
 __all__ = ["SealsDataset", "TestDataset"]
 
+import pandas as pd
 from torch.utils.data import Dataset
-from PIL import Image
 import numpy as np
 import torch
 import os
-import geopandas as gpd
 import cv2
 from utils.data_processing import get_transforms
 
@@ -20,27 +19,27 @@ class SealsDataset(Dataset):
         augmentation_mode: str = "simple",
     ):
 
-        # read dataframe with filenames and associated labels
+        # Read dataframe with filenames and associated labels
         self.root = data_folder
         self.transforms = get_transforms(phase, patch_size, augmentation_mode)
         self.patch_size = patch_size
         self.split = phase
 
-        # subset to training sets of interest
-        self.ds = gpd.read_file(annotation_ds)
+        # Subset to training sets of interest
+        self.ds = pd.read_csv(annotation_ds)
         self.ds = self.ds.loc[self.ds.split == self.split]
+        self.ds = self.ds.reset_index()
 
-        # get labels and img names
+        # Get labels and img names
         self.bin_labels = (
             self.ds["label"].isin(["crabeater", "weddell"]).astype(np.uint8)
         )
 
         self.img_names = [
-            f"{self.root}/{self.ds.training_set.iloc[idx]}/{self.split}/x/{file}"
+            f"{self.root}/{self.split}/x/{file}"
             for idx, file in enumerate(self.ds.img_name.values)
         ]
 
-        self.ds = self.ds.loc[(self.ds.has_mask == 1) | (self.ds.pack_ice == 0)]
         self.mask_names = [
             False if "negative" in ele else ele.replace("/x/", "/y/")
             for ele in self.img_names
@@ -61,7 +60,7 @@ class SealsDataset(Dataset):
         if mask_path:
             mask = cv2.imread(mask_path, 0)
         else:
-            mask = np.zeros([img.shape[0], img.shape[1], 1], dtype=np.uint8)
+            mask = np.zeros([self.patch_size, self.patch_size, 1], dtype=np.uint8)
 
         if self.transforms is not None:
             try:
@@ -70,7 +69,8 @@ class SealsDataset(Dataset):
                 img = augmented["image"]
                 mask = augmented["mask"].reshape([1, self.patch_size, self.patch_size])
 
-            except RuntimeError:
+            except:
+                print(self.ds.iloc[idx])
                 idx -= 5
                 img_path = self.img_names[idx]
                 mask_path = self.mask_names[idx]
@@ -88,8 +88,7 @@ class SealsDataset(Dataset):
 
         if mask.sum() == 0:
             label = 0
-
-        count = round(mask.sum() / 255.0 / 5)
+        count = (mask.sum() / 255.0 / 5.0).round()
         return img, count, label, mask
 
 
