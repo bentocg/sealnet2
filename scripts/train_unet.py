@@ -55,8 +55,8 @@ def train_net(
         patch_size=256,
     )
 
-    n_train = len(train_loader)
-    n_val = len(val_loader)
+    n_train = len(train_loader) * batch_size
+    n_val = len(val_loader) * batch_size * 2
 
     # Initialize logging
     experiment = wandb.init(project="U-Net", resume="allow", anonymous="must")
@@ -112,7 +112,9 @@ def train_net(
 
                 images = images.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
-                true_counts = true_counts.to(device=device, dtype=torch.float32).reshape(-1, 1)
+                true_counts = true_counts.to(
+                    device=device, dtype=torch.float32
+                ).reshape(-1, 1)
 
                 with torch.cuda.amp.autocast(enabled=amp):
                     pred_masks, pred_counts = net(images)
@@ -134,11 +136,13 @@ def train_net(
                 pbar.set_postfix(**{"loss (batch)": loss.item()})
 
                 # Evaluation round (2 rounds per epoch)
-                division_step = n_train // (batch_size * 2)
+                division_step = n_train // (batch_size * 20)
                 if division_step > 0:
                     if global_step % division_step == 0:
 
-                        f1_score, precision, recall, dice_score = evaluate(net, val_loader, device)
+                        f1_score, precision, recall, dice_score = evaluate(
+                            net, val_loader, device
+                        )
                         scheduler.step(f1_score)
 
                         logging.info("Validation F1 score: {}".format(f1_score))
@@ -149,9 +153,13 @@ def train_net(
                                 "validation instance precision": precision,
                                 "validation instance recall": recall,
                                 "validation pixel dice": dice_score,
-                                "images": wandb.Image(images[0].cpu()),
+                                "images": wandb.Image(
+                                    images[0].cpu()
+                                ),
                                 "masks": {
-                                    "true": wandb.Image(true_masks[0].float().cpu()),
+                                    "true": wandb.Image(
+                                        true_masks[0].float().cpu()
+                                    ),
                                     "pred": wandb.Image(
                                         torch.softmax(pred_masks, dim=1)
                                         .argmax(dim=1)[0]

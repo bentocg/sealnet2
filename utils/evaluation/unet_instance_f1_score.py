@@ -1,8 +1,11 @@
+from typing import List
+
 import torch
 import numpy as np
+from multiprocessing import Pool
 
 
-def getxy_max(input_array: np.array, n: int, min_dist: int = 3):
+def getxy_max(input_array: np.ndarray, n: int, min_dist: int = 3):
     """[Helper function to get n highest points in 2D array keeping a minimum distance between hits]
 
     Arguments:
@@ -15,6 +18,7 @@ def getxy_max(input_array: np.array, n: int, min_dist: int = 3):
     Returns:
         [list] -- [list of x, y tuples with indices for hotspots]
     """
+
     # check for invalid inputs and copy array
     assert len(input_array.shape) in [2, 3], "invalid input dimensions"
     if len(input_array.shape) == 3:
@@ -46,8 +50,8 @@ def getxy_max(input_array: np.array, n: int, min_dist: int = 3):
             idx += 1
             out_xy.append((row, col))
             array[
-                max(0, row - min_dist): min(n_rows, row + min_dist),
-                max(0, col - min_dist): min(n_cols, col + min_dist),
+                max(0, row - min_dist) : min(n_rows, row + min_dist),
+                max(0, col - min_dist) : min(n_cols, col + min_dist),
             ] = 0
 
     # return indices
@@ -60,6 +64,7 @@ def unet_instance_f1_score(
     pred_masks: torch.float32,
     pred_counts: torch.float32,
     matching_tolerance: int = 3,
+    max_pred_count: int = 30,
 ):
     # Store results
     fn = 0
@@ -68,11 +73,10 @@ def unet_instance_f1_score(
 
     # Calculate GT and predicted points
     ground_truth_xy = [
-        getxy_max(mask, int(true_counts[idx]))
-        for idx, mask in enumerate(true_masks.numpy())
+        getxy_max(mask, true_counts[idx]) for idx, mask in enumerate(true_masks.numpy())
     ]
     pred_xy = [
-        getxy_max(mask, int((pred_counts[idx]).round()))
+        getxy_max(mask, min(int(pred_counts[idx]), max_pred_count))
         for idx, mask in enumerate(pred_masks.numpy())
     ]
 
@@ -105,7 +109,7 @@ def unet_instance_f1_score(
             fn += len(gt_points) - n_matches
 
     # Return f1 score, precision and recall
-    eps = 1E-8
+    eps = 1e-8
     precision = tp / (tp + fp + eps)
     recall = tp / (tp + fn + eps)
     f1 = 2 * (precision * recall / (precision + recall + eps))

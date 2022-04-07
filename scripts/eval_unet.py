@@ -1,7 +1,6 @@
 import torch
 from tqdm import tqdm
 from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score
-import torch.nn.functional as F
 from utils.evaluation.dice_score import dice_coeff
 
 
@@ -40,7 +39,7 @@ def evaluate(net, dataloader, device):
             recall += batch_recall
 
             # Calculate dice coefficient
-            pred_masks = (F.sigmoid(pred_masks) > 0.5).float()
+            pred_masks = (torch.sigmoid(pred_masks) > 0.5).float()
             true_masks = true_masks.to(device=device, dtype=torch.float32)
             dice_score += dice_coeff(pred_masks, true_masks, reduce_batch_first=False)
 
