@@ -55,7 +55,7 @@ def parse_args():
         "--output-dir",
         dest="output_dir",
         type=str,
-        default="training_set",
+        default="../training_set",
         help="Path to output dir to save centroids binary mask.",
     )
     return parser.parse_args()
