@@ -86,6 +86,7 @@ def main():
     curr_catalog_id = ""
     tiff = Tiff()
     for scene in scenes:
+        print(scene)
         scn_annotations = annotations.loc[annotations.scene == scene]
 
         # Get dataset split, catalog id and label for naming
