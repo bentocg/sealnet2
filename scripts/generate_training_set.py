@@ -18,37 +18,42 @@ def parse_args():
     parser = ArgumentParser("Script to create binary masks from an esri shapefile")
     parser.add_argument(
         "-i",
-        "--input_shapefile",
+        "--input-shapefile",
+        dest="input_shapefile",
         type=str,
         help="Path to input shapefile with " "a 'geometry' and a 'scene' column",
     )
     parser.add_argument(
-        "-s", "--scenes_dir", type=str, help="Path to folder with scenes as .tif files."
+        "-s", "--scenes-dir", dest="scenes_dir", type=str, help="Path to folder with scenes as .tif files."
     )
     parser.add_argument(
         "-p",
-        "--patch_size",
+        "--patch-size",
+        dest="patch_size",
         type=int,
         default=768,
         help="Patch size for creating tiles.",
     )
     parser.add_argument(
         "-n",
-        "--negatives_per_scene",
+        "--negatives-per-scene",
+        dest="negatives_per_scene",
         type=int,
         default=250,
         help="Number of negative patches per scene.",
     )
     parser.add_argument(
         "-v",
-        "--percent_val_negative",
+        "--percent-val-negative",
+        dest="percent_val_negative",
         type=float,
         default=0.2,
         help="Percent validation for negative patches",
     )
     parser.add_argument(
         "-o",
-        "--output_dir",
+        "--output-dir",
+        dest="output_dir",
         type=str,
         default="training_set",
         help="Path to output dir to save centroids binary mask.",
