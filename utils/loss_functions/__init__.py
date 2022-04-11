@@ -1,1 +1,1 @@
-from .mixed_loss import MixedLoss, FocalLoss, DiceLoss, LogCoshLoss, DicePerimeterLoss
+from .loss_functions import SoftDiceLoss, DiceLoss, MixedLoss, FocalLoss
