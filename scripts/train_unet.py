@@ -15,7 +15,7 @@ sys.path.insert(0, "../")
 
 from utils.data_processing import provider, inv_normalize
 from utils.loss_functions import SoftDiceLoss, FocalLoss, DiceLoss, MixedLoss
-from scripts.eval_unet import evaluate
+from utils.evaluation.eval_unet import validate_unet, test_unet
 
 dir_checkpoint = Path("./checkpoints/")
 
@@ -25,14 +25,26 @@ def get_args():
         description="Train the UNet on images and target masks"
     )
     parser.add_argument(
+        "--training-dir",
+        "-tr",
+        dest="training_dir",
+        type=str,
+        default="training_set",
+        help="Path to training set",
+    )
+    parser.add_argument(
+        "--alpha-count",
+        "-a",
+        dest="alpha_count",
+        type=float,
+        default=0.5,
+        help="Relative weight for count loss",
+    )
+    parser.add_argument(
         "--epochs", "-e", metavar="E", type=int, default=5, help="Number of epochs"
     )
     parser.add_argument(
-        "--experiment-id",
-        "-i",
-        type=str,
-        default="test",
-        help="Unique experiment id"
+        "--experiment-id", "-i", type=str, default="test", help="Unique experiment id"
     )
     parser.add_argument(
         "--batch-size",
@@ -41,7 +53,15 @@ def get_args():
         metavar="B",
         type=int,
         default=1,
-        help="Batch size",
+        help="Batch size for dataloader, multiplied by 2 for validation",
+    )
+    parser.add_argument(
+        "--patch-size",
+        "-ps",
+        dest="patch_size",
+        type=int,
+        default=256,
+        help="Patch size for input tiles",
     )
     parser.add_argument(
         "--learning-rate",
@@ -87,6 +107,14 @@ def get_args():
         dest="criterion_mask",
         help="Loss function for training U-Net masks, one of {'Dice', 'SoftDice', 'Focal', 'Mixed'}",
     )
+    parser.add_argument(
+        "--num-workers",
+        "-w",
+        dest="num_workers",
+        type=int,
+        default=1,
+        help="Number of workers for dataloaders",
+    )
 
     return parser.parse_args()
 
@@ -95,8 +123,11 @@ def train_net(
     net,
     device,
     experiment_id: str,
+    alpha_count: float = 0.5,
     epochs: int = 5,
     batch_size: int = 1,
+    patch_size: int = 256,
+    num_workers: int = 1,
     learning_rate: float = 1e-5,
     criterion_mask: nn.Module = SoftDiceLoss(),
     patience: int = 3,
@@ -112,28 +143,30 @@ def train_net(
     train_loader = provider(
         data_folder="../training_set",
         annotation_ds="../training_set/annotations_df.csv",
-        num_workers=1,
+        num_workers=num_workers,
         augmentation_mode=augmentation_mode,
         batch_size=batch_size,
         neg_to_pos_ratio=neg_to_pos_ratio,
         phase="training",
-        patch_size=256,
+        patch_size=patch_size,
     )
     val_loader = provider(
         data_folder="../training_set",
         annotation_ds="../training_set/annotations_df.csv",
-        num_workers=1,
+        num_workers=num_workers,
         augmentation_mode=augmentation_mode,
         batch_size=batch_size * 2,
         phase="validation",
-        patch_size=256,
+        patch_size=patch_size,
     )
 
     n_train = len(train_loader) * batch_size
     n_val = len(val_loader) * batch_size * 2
 
     # Initialize logging
-    experiment = wandb.init(project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id)
+    experiment = wandb.init(
+        project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
+    )
     experiment.config.update(
         dict(
             epochs=epochs,
@@ -198,9 +231,9 @@ def train_net(
 
                 with torch.cuda.amp.autocast(enabled=amp):
                     pred_masks, pred_counts = net(images)
-                    loss = criterion_mask(pred_masks, true_masks) + criterion_count(
-                        pred_counts, true_counts
-                    )
+                    loss_mask = criterion_mask(pred_masks, true_masks)
+                    loss_count = criterion_count(pred_counts, true_counts)
+                    loss = (1 - alpha_count) * loss_mask + alpha_count * loss_count
 
                 optimizer.zero_grad(set_to_none=True)
                 grad_scaler.scale(loss).backward()
@@ -211,16 +244,26 @@ def train_net(
                 global_step += 1
                 epoch_loss += loss.item()
                 experiment.log(
-                    {"train loss": loss.item(), "step": global_step, "epoch": epoch}
+                    {
+                        "train loss (total)": loss.item(),
+                        "train loss (count)": loss_count.item(),
+                        "train loss (mask)": loss_mask.item(),
+                        "step": global_step,
+                        "epoch": epoch,
+                    }
                 )
-                pbar.set_postfix(**{"loss (batch)": loss.item()})
+                pbar.set_postfix(**{"total loss (batch)": loss.item()})
+                pbar.set_postfix(**{"mask loss (batch)": loss_mask.item()})
+                pbar.set_postfix(**{"count loss (batch)": loss_count.item()})
 
                 # Evaluation round (3 rounds per epoch)
-                division_step = n_train // (batch_size * 3)
+                division_step = n_train // (
+                    batch_size * 40
+                )  # TODO TEST revert this to 3
                 if division_step > 0:
                     if global_step % division_step == 0:
 
-                        f1_score, precision, recall, dice_score = evaluate(
+                        f1_score, precision, recall, dice_score, count_mae = validate_unet(
                             net, val_loader, device
                         )
                         scheduler.step(f1_score)
@@ -253,6 +296,7 @@ def train_net(
                                 "validation instance f1": f1_score,
                                 "validation instance precision": precision,
                                 "validation instance recall": recall,
+                                "validation count MAE": count_mae,
                                 "validation pixel dice": dice_score,
                                 "output": wandb.Image(grid),
                                 "step": global_step,
@@ -272,11 +316,10 @@ def train_net(
 
         if save_checkpoint:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
-            torch.save(
-                net.state_dict(),
-                f"{dir_checkpoint}/{experiment_id}.pth"
+            torch.save(net.state_dict(), f"{dir_checkpoint}/{experiment_id}.pth")
+            logging.info(
+                f"Checkpoint for experiment {experiment_id} epoch {epoch + 1} saved!"
             )
-            logging.info(f"Checkpoint for experiment {experiment_id} epoch {epoch + 1} saved!")
 
 
 if __name__ == "__main__":
@@ -319,6 +362,9 @@ if __name__ == "__main__":
         train_net(
             net=net,
             epochs=args.epochs,
+            alpha_count=args.alpha_count,
+            patch_size=args.patch_size,
+            num_workers=args.num_workers,
             experiment_id=args.experiment_id,
             batch_size=args.batch_size,
             criterion_mask=criterion_mask,
@@ -332,8 +378,8 @@ if __name__ == "__main__":
         logging.info("Saved interrupt")
 
     # Start test loop
-    # try:
-    #     test_net()
-    # except KeyboardInterrupt:
-    #     logging.info("Testing interruped")
-    #     sys.exit(0)
+    try:
+        test_unet()
+    except KeyboardInterrupt:
+        logging.info("Testing interruped")
+        sys.exit(0)

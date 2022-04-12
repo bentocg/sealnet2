@@ -1,6 +1,6 @@
 import torch
 from tqdm import tqdm
-from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score
+from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thresh
 from utils.evaluation.dice_score import dice_coeff
 
 
@@ -10,6 +10,7 @@ def evaluate(net, dataloader, device):
     f1_score = 0
     precision = 0
     recall = 0
+    count_mae = 0
     dice_score = 0
 
     # Iterate over the validation set
@@ -28,15 +29,17 @@ def evaluate(net, dataloader, device):
             pred_masks, pred_counts = net(images)
 
             # Calculate instance level f1 score after thresholding
-            batch_f1, batch_precision, batch_recall = unet_instance_f1_score(
+            batch_f1, batch_precision, batch_recall, batch_mae = unet_instance_f1_score_thresh(
                 true_masks=true_masks,
                 true_counts=true_counts,
                 pred_masks=pred_masks,
                 pred_counts=pred_counts,
+                threshold=0.5
             )
             f1_score += batch_f1
             precision += batch_precision
             recall += batch_recall
+            count_mae += batch_mae
 
             # Calculate dice coefficient
             pred_masks = (torch.sigmoid(pred_masks) > 0.5).float()
@@ -54,4 +57,5 @@ def evaluate(net, dataloader, device):
         precision / num_val_batches,
         recall / num_val_batches,
         dice_score / num_val_batches,
+        count_mae / num_val_batches,
     )
