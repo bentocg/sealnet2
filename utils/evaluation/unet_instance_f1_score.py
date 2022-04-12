@@ -1,8 +1,9 @@
-from typing import List
 
+import cv2
 import torch
 import numpy as np
-from multiprocessing import Pool
+
+from .eval_unet import match_polygons
 
 
 def getxy_max(input_array: np.ndarray, n: int, min_dist: int = 3):
@@ -115,3 +116,41 @@ def unet_instance_f1_score(
     f1 = 2 * (precision * recall / (precision + recall + eps))
 
     return f1, precision, recall
+
+
+def unet_instance_f1_score_thresh(
+    true_masks: torch.float32,
+    pred_masks: torch.float32,
+    true_counts: torch.float32,
+    pred_counts: torch.float32,
+    threshold: 0.5,
+):
+    # Get count mean absolute error
+    count_mae = (true_counts - pred_counts).abs().mean()
+
+    # Threshold predictions
+    pred_masks = (torch.sigmoid(pred_masks) > threshold).float().cpu().numpy().astype(np.uint8)
+    true_masks = true_masks.cpu().numpy().astype(np.uint8)
+
+    # Store statistics
+    tp = 0
+    fp = 0
+    fn = 0
+
+    # Loop over images and masks
+    for idx, true_mask in enumerate(true_masks):
+
+        # Find elements in true and pred masks
+        tp_batch, fp_batch, fn_batch = match_polygons(true_mask[0], pred_masks[idx][0])
+
+        tp += tp_batch
+        fp += fp_batch
+        fn += fn_batch
+
+    # Return f1 score, precision and recall
+    eps = 1e-8
+    precision = tp / (tp + fp + eps)
+    recall = tp / (tp + fn + eps)
+    f1 = 2 * (precision * recall / (precision + recall + eps))
+
+    return f1, precision, recall, count_mae
