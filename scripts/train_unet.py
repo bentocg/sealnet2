@@ -41,6 +41,13 @@ def get_args():
         help="Relative weight for count loss",
     )
     parser.add_argument(
+        "--uniform-group-weights" "-u",
+        dest="uniform_group_weights",
+        type=int,
+        default=False,
+        help="Use weighted sampler to have uniform group sizes on positive samples?",
+    )
+    parser.add_argument(
         "--epochs", "-e", metavar="E", type=int, default=5, help="Number of epochs"
     )
     parser.add_argument(
@@ -115,6 +122,17 @@ def get_args():
         default=1,
         help="Number of workers for dataloaders",
     )
+    parser.add_argument(
+        "--val-rounds-per-epoch",
+        "-v",
+        dest="val_rounds_per_epoch",
+        type=int,
+        default=3,
+        help="Number of validation rounds per epoch"
+    )
+    parser.add_argument(
+
+    )
 
     return parser.parse_args()
 
@@ -134,7 +152,9 @@ def train_net(
     decay_factor: float = 0.5,
     criterion_count: nn.Module = nn.SmoothL1Loss(),
     neg_to_pos_ratio: float = 1.0,
+    val_rounds_per_epoch: int = 3,
     augmentation_mode: str = "simple",
+    uniform_group_weights: bool = False,
     save_checkpoint: bool = True,
     amp: bool = False,
 ):
@@ -145,6 +165,7 @@ def train_net(
         annotation_ds="../training_set/annotations_df.csv",
         num_workers=num_workers,
         augmentation_mode=augmentation_mode,
+        uniform_group_weights=uniform_group_weights,
         batch_size=batch_size,
         neg_to_pos_ratio=neg_to_pos_ratio,
         phase="training",
@@ -192,6 +213,9 @@ def train_net(
         Decay factor:    {decay_factor}
         Criterion count: {criterion_count}
         Criterion mask:  {criterion_mask}
+        Count loss weight:     {alpha_count}
+        Validation rounds per epoch: {val_rounds_per_epoch}
+        Uniform group weights: {uniform_group_weights}
         Negative to positive ratio:  {neg_to_pos_ratio}
         Augmentation mode: {augmentation_mode}
         Mixed Precision: {amp}
@@ -256,16 +280,20 @@ def train_net(
                 pbar.set_postfix(**{"mask loss (batch)": loss_mask.item()})
                 pbar.set_postfix(**{"count loss (batch)": loss_count.item()})
 
-                # Evaluation round (3 rounds per epoch)
+                # Evaluation round (n rounds per epoch)
                 division_step = n_train // (
-                    batch_size * 40
-                )  # TODO TEST revert this to 3
+                    batch_size * val_rounds_per_epoch
+                )
                 if division_step > 0:
                     if global_step % division_step == 0:
 
-                        f1_score, precision, recall, dice_score, count_mae = validate_unet(
-                            net, val_loader, device
-                        )
+                        (
+                            f1_score,
+                            precision,
+                            recall,
+                            dice_score,
+                            count_mae,
+                        ) = validate_unet(net, val_loader, device)
                         scheduler.step(f1_score)
 
                         logging.info("Validation F1 score: {}".format(f1_score))
@@ -363,12 +391,14 @@ if __name__ == "__main__":
             net=net,
             epochs=args.epochs,
             alpha_count=args.alpha_count,
+            uniform_group_weights=args.uniform_group_weights,
             patch_size=args.patch_size,
             num_workers=args.num_workers,
             experiment_id=args.experiment_id,
             batch_size=args.batch_size,
             criterion_mask=criterion_mask,
             neg_to_pos_ratio=args.neg_to_pos_ratio,
+            val_rounds_per_epoch=args.val_rounds_per_epoch,
             learning_rate=args.lr,
             device=device,
             amp=args.amp,
@@ -379,7 +409,13 @@ if __name__ == "__main__":
 
     # Start test loop
     try:
-        test_unet()
+        test_unet(
+            device=device,
+            net=net,
+            test_dir="../training_set/test",
+            experiment_id=args.experiment_id,
+            test_scenes_dir=args.test_scenes_dir,
+        )
     except KeyboardInterrupt:
         logging.info("Testing interruped")
         sys.exit(0)
