@@ -45,6 +45,10 @@ class SealsDataset(Dataset):
             for ele in self.img_names
         ]
 
+        self.base_count = [
+             cv2.imread(filename).sum() // 5 if filename else 0 for filename in self.mask_names
+        ]
+
     def __len__(self):
         return len(self.ds)
 
@@ -89,7 +93,7 @@ class SealsDataset(Dataset):
         if mask.sum() == 0:
             label = 0
         count = (mask.sum() / 255.0 / 5.0).round()
-        return img, count, label, mask
+        return img, count, label, (mask / 255).float()
 
 
 class TestDataset(Dataset):

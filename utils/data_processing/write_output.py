@@ -9,9 +9,6 @@ def write_output(out, img_names, out_dir):
     if type(out) != list:
         out = out.cpu().numpy().astype(np.uint8)
     for idx, img in enumerate(out):
-        if len(img.shape) == 3:
-            cv2.imwrite(
-                f"{out_dir}/{os.path.basename(img_names[idx])}", img.transpose(1, 2, 0)
-            )
-        else:
-            cv2.imwrite(f"{out_dir}/{os.path.basename(img_names[idx])}", img)
+        out_dir = f"{out_dir}/{os.path.basename(img_names[idx]).split('_')[0]}"
+        os.makedirs(out_dir, exist_ok=True)
+        cv2.imwrite(f"{out_dir}/{os.path.basename(img_names[idx])}", img)
