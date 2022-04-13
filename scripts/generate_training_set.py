@@ -24,7 +24,11 @@ def parse_args():
         help="Path to input shapefile with " "a 'geometry' and a 'scene' column",
     )
     parser.add_argument(
-        "-s", "--scenes-dir", dest="scenes_dir", type=str, help="Path to folder with scenes as .tif files."
+        "-s",
+        "--scenes-dir",
+        dest="scenes_dir",
+        type=str,
+        help="Path to folder with scenes as .tif files.",
     )
     parser.add_argument(
         "-p",
@@ -63,6 +67,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Max tries for negative tiles generation
+    MAX_TRIES = 2500
 
     # Get half patch size for cropping rasters and masks
     half_patch = args.patch_size // 2
@@ -174,6 +181,7 @@ def main():
 
             # Add negative patches
             prev_len = len(existing_negatives)
+            tries = 0
             while len(existing_negatives) - prev_len < args.negatives_per_scene:
 
                 # Sample x, y at random
@@ -182,7 +190,19 @@ def main():
 
                 # Make sure the crop center is not too close to an existing negative crop
                 for point in existing_negatives:
+                    if type(point) != np.ndarray:  # Ignore fake points
+                        continue
                     if np.linalg.norm(point - curr_point) < half_patch:
+                        tries += 1
+                        if tries > MAX_TRIES:
+
+                            # Add fake points so negative patch creation breaks out of while loop
+                            existing_negatives = existing_negatives + [False] * (
+                                args.negatives_per_scene
+                            )
+                            print(
+                                "Exceeded max tries, skipping negative tile generation."
+                            )
                         continue
 
                 # Get window and ake sure the crop has non-zero content
@@ -217,6 +237,14 @@ def main():
                 )
 
                 if catalog_annotations.geometry.intersects(crop_polygon).max():
+                    tries += 1
+                    if tries > MAX_TRIES:
+
+                        # Add fake points so negative patch creation breaks out of while loop
+                        existing_negatives = existing_negatives + [False] * (
+                            args.negatives_per_scene
+                        )
+                        print("Exceeded max tries, skipping negative tile generation.")
                     continue
 
                 # Save file and add point to existing negatives
@@ -243,6 +271,7 @@ def main():
                     },
                     ignore_index=True,
                 )
+        print(f"Finished processing {scene}")
 
     # Save annotations df
     annotations_df.to_csv(f"{args.output_dir}/annotations_df.csv", index=False)
