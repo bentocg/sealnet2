@@ -67,28 +67,23 @@ class SealsDataset(Dataset):
             mask = np.zeros([self.patch_size, self.patch_size, 1], dtype=np.uint8)
 
         if self.transforms is not None:
-            try:
+            if "negative" in img_path:
                 augmented = self.transforms(image=img, mask=mask)
 
                 img = augmented["image"]
                 mask = augmented["mask"].reshape([1, self.patch_size, self.patch_size])
+            else:
+                while True:
+                    augmented = self.transforms(image=img, mask=mask)
 
-            except:
-                print(self.ds.iloc[idx])
-                idx -= 5
-                img_path = self.img_names[idx]
-                mask_path = self.mask_names[idx]
-                label = self.bin_labels[idx]
-
-                img = cv2.imread(img_path)
-                if mask_path:
-                    mask = cv2.imread(mask_path, 0)
-                else:
-                    mask = np.zeros([self.patch_size, self.patch_size], dtype=np.uint8)
-                augmented = self.transforms(image=img, mask=mask)
-
-                img = augmented["image"].reshape([1, self.patch_size, self.patch_size])
-                mask = augmented["mask"].reshape([1, self.patch_size, self.patch_size])
+                    img_aug = augmented["image"]
+                    mask_aug = augmented["mask"].reshape([1, self.patch_size, self.patch_size])
+                    if mask_aug.sum() > 0:
+                        img = img_aug
+                        mask = mask_aug
+                        del img_aug
+                        del mask_aug
+                        break
 
         if mask.sum() == 0:
             label = 0

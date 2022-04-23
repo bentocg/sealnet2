@@ -1,4 +1,4 @@
-from .data_augmentation import get_transforms
+from .data_augmentation import get_transforms, inv_normalize
 from .image_datasets import SealsDataset, TestDataset
 from .dataloader import provider
 from .write_output import write_output
