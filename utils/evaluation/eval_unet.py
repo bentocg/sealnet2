@@ -1,51 +1,18 @@
 import os
+import shutil
 
 import cv2
-import numpy as np
-import rasterio
+import pandas as pd
 import torch
 import wandb
-from shapely.geometry import Polygon
 from torch import nn
 from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 from utils.data_processing import TestDataset, write_output, merge_output
+from utils.evaluation.polygon_matching import match_polygons
 from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thresh
 from utils.evaluation.dice_score import dice_coeff
-
-
-def match_polygons(true_mask, pred_mask):
-
-    # Find elements in true and pred masks
-    true_contours, _ = cv2.findContours(true_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    pred_contours, _ = cv2.findContours(pred_mask, cv2.RETR_EXTERNAL,
-                                        cv2.CHAIN_APPROX_SIMPLE)
-
-    # Reformat contours
-    true_contours = [np.array([ele[0] for ele in coords]) for coords in true_contours if
-                     len(coords) > 2]
-    pred_contours = [np.array([ele[0] for ele in coords]) for coords in pred_contours if
-                     len(coords) > 2]
-
-    # Convert into polygons
-    true_polygons = [Polygon(coords).buffer(0) for coords in true_contours]
-    pred_polygons = [Polygon(coords).buffer(0) for coords in pred_contours]
-
-    # Match true polygons
-    matched = set([])
-    for idx_true, true_pol in enumerate(true_polygons):
-        for idx_pred, pred_pol in enumerate(pred_polygons):
-            if idx_pred in matched:
-                continue
-            if true_pol.intersects(pred_pol):
-                matched.add(idx_pred)
-                break
-
-    tp = len(matched)
-    fp = len(pred_polygons) - len(matched)
-    fn = len(true_polygons) - len(matched)
-
-    return tp, fp, fn
 
 
 def validate_unet(net, dataloader, device):
@@ -105,7 +72,8 @@ def validate_unet(net, dataloader, device):
     )
 
 
-def test_unet(net: nn.Module, test_dir: str, experiment_id: str, device: str, test_scenes_dir: str):
+def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_workers: int,
+              batch_size: int, threshold: float = 0.5):
     # Resume experiment
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
@@ -117,27 +85,39 @@ def test_unet(net: nn.Module, test_dir: str, experiment_id: str, device: str, te
     fn = 0
 
     # Create Dataloader for test scenes
-    test_loader = TestDataset(test_dir)
+    test_loader = DataLoader(dataset=TestDataset(f"{test_dir}/x"),
+                             num_workers=num_workers,
+                             batch_size=batch_size,
+                             shuffle=False)
 
     # Put model in eval mode
     net = net.eval()
+
+    # Read scene stats csv
+    scene_stats = pd.read_csv(f"{test_dir}/scene_stats.csv")
 
     # Loop through dataloader
     out_folder = f"{experiment_id}_temp_output"
     for images, image_names in test_loader:
 
         images = images.to(device)
-        outputs = net(images)
+        with torch.no_grad():
+            outputs, _ = net(images)
 
-        # Save output
-        write_output(outputs, image_names, out_folder)
+            # Threshold output
+            outputs = torch.sigmoid(outputs)
+            outputs = (outputs > threshold).squeeze(1).detach().float() * 255
+
+            # Save output
+            write_output(outputs, image_names, out_folder)
+
 
     # Merge output for each scene and match with GT mask
     for scene in os.listdir(out_folder):
-        with rasterio.open(f"{test_scenes_dir}/{scene}") as src:
-            mask_shape = (src.height, src.width)
+        stats_scene = scene_stats.loc[scene_stats.scene == scene]
+        mask_shape = (stats_scene.height, stats_scene.width)
         pred_mask = merge_output(f"{out_folder}/{scene}", mask_shape)
-        true_mask = cv2.imread(f"{test_dir}/y]{scene}", 0)
+        true_mask = cv2.imread(f"{test_dir}/y/{scene}", 0)
         tp_scene, fp_scene, fn_scene = match_polygons(true_mask=true_mask, pred_mask=pred_mask)
 
         tp += tp_scene
@@ -157,4 +137,7 @@ def test_unet(net: nn.Module, test_dir: str, experiment_id: str, device: str, te
             "test instance recall": recall,
         }
     )
+
+    # Remove temp folders
+    shutil.rmtree(out_folder)
 

@@ -3,7 +3,7 @@ import cv2
 import torch
 import numpy as np
 
-from .eval_unet import match_polygons
+from utils.evaluation.polygon_matching import match_polygons
 
 
 def getxy_max(input_array: np.ndarray, n: int, min_dist: int = 3):
