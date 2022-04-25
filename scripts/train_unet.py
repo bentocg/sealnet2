@@ -11,8 +11,11 @@ import wandb
 from torch import optim
 from tqdm import tqdm
 
+
 sys.path.insert(0, "../")
 
+
+from utils.training.utility import seed_all
 from utils.data_processing import provider, inv_normalize
 from utils.loss_functions import SoftDiceLoss, FocalLoss, DiceLoss, MixedLoss
 from utils.evaluation.eval_unet import validate_unet, test_unet
@@ -41,7 +44,8 @@ def get_args():
         help="Relative weight for count loss",
     )
     parser.add_argument(
-        "--uniform-group-weights" "-u",
+        "--uniform-group-weights",
+        "-u",
         dest="uniform_group_weights",
         type=int,
         default=False,
@@ -94,17 +98,15 @@ def get_args():
         "--patience", "-p", type=int, default=3, help="Number of non-impro"
     )
     parser.add_argument(
-        "--augmentation_mode",
+        "--augmentation-mode",
         "-g",
         type=str,
+        dest="augmentation_mode",
         default="simple",
         help="Augmentation mode",
     )
     parser.add_argument(
         "--amp", action="store_true", default=False, help="Use mixed precision"
-    )
-    parser.add_argument(
-        "--bilinear", action="store_true", default=False, help="Use bilinear upsampling"
     )
     parser.add_argument(
         "--criterion-mask",
@@ -128,10 +130,7 @@ def get_args():
         dest="val_rounds_per_epoch",
         type=int,
         default=3,
-        help="Number of validation rounds per epoch"
-    )
-    parser.add_argument(
-
+        help="Number of validation rounds per epoch",
     )
 
     return parser.parse_args()
@@ -281,9 +280,7 @@ def train_net(
                 pbar.set_postfix(**{"count loss (batch)": loss_count.item()})
 
                 # Evaluation round (n rounds per epoch)
-                division_step = n_train // (
-                    batch_size * val_rounds_per_epoch
-                )
+                division_step = n_train // (batch_size * val_rounds_per_epoch)
                 if division_step > 0:
                     if global_step % division_step == 0:
 
@@ -339,7 +336,7 @@ def train_net(
 
                         else:
                             non_improving += 1
-                            if non_improving > 15:
+                            if non_improving > 4 * val_rounds_per_epoch:
                                 return None
 
         if save_checkpoint:
@@ -385,6 +382,9 @@ if __name__ == "__main__":
 
     net.to(device=device)
 
+    # Set random seed
+    seed_all(0)
+
     # Start training loop
     try:
         train_net(
@@ -398,6 +398,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             criterion_mask=criterion_mask,
             neg_to_pos_ratio=args.neg_to_pos_ratio,
+            patience=args.patience,
             val_rounds_per_epoch=args.val_rounds_per_epoch,
             learning_rate=args.lr,
             device=device,
@@ -408,14 +409,17 @@ if __name__ == "__main__":
         logging.info("Saved interrupt")
 
     # Start test loop
+    logging.info("Started testing")
     try:
         test_unet(
             device=device,
             net=net,
             test_dir="../training_set/test",
             experiment_id=args.experiment_id,
-            test_scenes_dir=args.test_scenes_dir,
+            batch_size=args.batch_size * 2,
+            num_workers=args.num_workers
         )
+        logging.info("Testing finished successfully")
     except KeyboardInterrupt:
         logging.info("Testing interruped")
         sys.exit(0)
