@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -405,8 +406,7 @@ if __name__ == "__main__":
             amp=args.amp,
         )
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), "INTERRUPTED.pth")
-        logging.info("Saved interrupt")
+        logging.info("Training interrupted, continuing to testing")
 
     # Start test loop
     logging.info("Started testing")
@@ -419,7 +419,11 @@ if __name__ == "__main__":
             batch_size=args.batch_size * 2,
             num_workers=args.num_workers
         )
-        logging.info("Testing finished successfully")
+        logging.info("Testing complete saving model checkpoint")
+
+        # Save model checkpoint
+        os.makedirs("../checkpoints", exist_ok=True)
+        torch.save(net.state_dict(), f"../checkpoints/{args.experiment_id}.pth")
     except KeyboardInterrupt:
         logging.info("Testing interruped")
         sys.exit(0)

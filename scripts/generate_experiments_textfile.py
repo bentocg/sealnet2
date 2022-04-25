@@ -11,7 +11,7 @@ def main():
         count_alpha = str(np.random.uniform(0, 0.9))
         neg_to_pos_ratio = str(np.random.uniform(0, 1.0))
         aug = np.random.choice(["simple", "complex"])
-        patience = str(np.random.uniform(2, 6))
+        patience = str(np.random.randint(2, 6))
         loss_mask = np.random.choice(
             [
                 "Dice",
