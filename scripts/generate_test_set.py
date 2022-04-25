@@ -41,7 +41,7 @@ def parse_args():
         "-o",
         dest="output_dir",
         type=str,
-        default="../test",
+        default="../training_set/test",
         help="Directory to save test set",
     )
     parser.add_argument(
@@ -100,11 +100,25 @@ def main():
         if os.path.exists(f"{args.output_dir}/scene_stats.csv"):
             with open(f"{args.output_dir}/scene_stats.csv", "a") as file:
                 file.write(
-                    ",".join([str(ele) for ele in [scene, width, height, transform_coords]]) + "\n"
+                    ",".join(
+                        [str(ele) for ele in [scene, width, height] + transform_coords]
+                    )
+                    + "\n"
                 )
         else:
             stats = pd.DataFrame(
-                {"scene": scene, "height": height, "width": width, "transform": transform_coords}
+                {
+                    "scene": scene,
+                    "width": width,
+                    "height": height,
+                    "transform_a": transform.a,
+                    "transform_b": transform.b,
+                    "transform_c": transform.c,
+                    "transform_d": transform.d,
+                    "transform_e": transform.e,
+                    "transform_f": transform.f,
+                },
+                index=[0],
             )
             stats.to_csv(f"{args.output_dir}/scene_stats.csv", index=False)
 
@@ -132,7 +146,15 @@ def main():
             range(0, height, int(args.patch_size * args.stride)),
             range(0, width, int(args.patch_size * args.stride)),
         ):
+
+            # Make sure patches don't overflow
+            if left > height - args.patch_size:
+                left = height - args.patch_size
+            if down > width - args.patch_size:
+                down = width - args.patch_size
             right, top = left + args.patch_size, down + args.patch_size
+
+            # Create filename
             filename = (
                 f"{args.output_dir}/x/{scene[:-4]}_{left}_{down}_{right}_{top}.tif"
             )
@@ -158,6 +180,11 @@ def main():
                 range(0, height, int(args.patch_size * args.stride)),
                 range(0, width, int(args.patch_size * args.stride)),
             ):
+                if left > height - args.patch_size:
+                    left = height - args.patch_size
+                if down > width - args.patch_size:
+                    down = width - args.patch_size
+
                 right, top = left + args.patch_size, down + args.patch_size
                 filename = (
                     f"{args.output_dir}/x/{scene[:-4]}_{left}_{down}_{right}_{top}.tif"
@@ -165,6 +192,11 @@ def main():
                 crop = img[
                     0, left : left + args.patch_size, down : down + args.patch_size
                 ]
+
+                # Check if crop has non-missing data
+                if crop.sum() == 0:
+                    continue
+
                 cv2.imwrite(filename, crop)
 
 
