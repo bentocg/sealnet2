@@ -34,6 +34,7 @@ def validate_unet(net, dataloader, device, amp=False):
     ):
         # Move images and labels to correct device and type
         images = images.to(device=device, dtype=torch.float32)
+        true_counts = true_counts.to(device=device, dtype=torch.float32)
 
         with torch.cuda.amp.autocast(enabled=amp):
             with torch.no_grad():
