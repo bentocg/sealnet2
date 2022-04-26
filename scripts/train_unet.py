@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Union
 
 import torch
 import torch.nn as nn
@@ -146,8 +147,8 @@ def get_args():
 
 
 def train_net(
-    net,
-    device,
+    net: Union[nn.DataParallel, smp.Unet],
+    device: torch.device,
     experiment_id: str,
     alpha_count: float = 0.5,
     epochs: int = 5,
@@ -165,7 +166,32 @@ def train_net(
     uniform_group_weights: bool = False,
     save_checkpoint: bool = True,
     amp: bool = False,
-):
+) -> None:
+    """
+    Training loop for SealNet2.0, supports several options for hyperparameter tuning. Stores
+    training statistics in wandb project.
+
+    :param net: Unet from smp with a regression head
+    :param device: device for running training loop
+    :param experiment_id: experiment id for wandb
+    :param alpha_count: relative weight for regression loss [0, 1]
+    :param epochs: number of epochs to run training for
+    :param batch_size: batch size for training dataloader (multiplied x2 for val and test)
+    :param patch_size: patch size for training images
+    :param num_workers: number of workers for train/val dataloaders
+    :param learning_rate: learning rate
+    :param criterion_mask: criterion for segmentation loss
+    :param patience: number of rounds without improvement until reducing learning rate
+    :param decay_factor: multiplier for reducing learning rate
+    :param criterion_count: criterion for regression loss
+    :param neg_to_pos_ratio: ratio of negative to positive images on training batches
+    :param val_rounds_per_epoch: number of validation rounds within one epoch
+    :param augmentation_mode: data augmentation mode E{simple, complex}
+    :param uniform_group_weights: use uniform group weights on training batches?
+    :param save_checkpoint: save model checkpoints?
+    :param amp: use auto mixed-precision? (make sure your GPU supports amp)
+
+    """
 
     # Create data loaders
     train_loader = provider(

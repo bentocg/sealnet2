@@ -8,6 +8,7 @@ import wandb
 from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from segmentation_models_pytorch import Unet
 
 from utils.data_processing import TestDataset, write_output, merge_output
 from utils.evaluation.polygon_matching import match_polygons
@@ -15,7 +16,21 @@ from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thres
 from utils.evaluation.dice_score import dice_coeff
 
 
-def validate_unet(net, dataloader, device, amp=False):
+def validate_unet(
+    net: Unet, dataloader: DataLoader, device: torch.device, amp: bool = False
+) -> (float, float, float, float, float):
+    """
+    Validation loop for SealNet2. Matches predicted polygons to ground truth polygons to get
+    instance level f1-score.
+
+    :param net: pytorch model that predicts masks and counts
+    :param dataloader: dataloader with validation set
+    :param device: torch device for running validation
+    :param amp: use auto-mixed precision?
+
+    :return: f-1 score, precision, recall, pixel-level dice, and count MAE, respectively
+    """
+
     net.eval()
     num_val_batches = len(dataloader)
     f1_score = 0
@@ -42,12 +57,17 @@ def validate_unet(net, dataloader, device, amp=False):
                 pred_masks, pred_counts = net(images)
 
                 # Calculate instance level f1 score after thresholding
-                batch_f1, batch_precision, batch_recall, batch_mae = unet_instance_f1_score_thresh(
+                (
+                    batch_f1,
+                    batch_precision,
+                    batch_recall,
+                    batch_mae,
+                ) = unet_instance_f1_score_thresh(
                     true_masks=true_masks,
                     true_counts=true_counts,
                     pred_masks=pred_masks,
                     pred_counts=pred_counts,
-                    threshold=0.5
+                    threshold=0.5,
                 )
                 f1_score += batch_f1
                 precision += batch_precision
@@ -57,7 +77,9 @@ def validate_unet(net, dataloader, device, amp=False):
                 # Calculate dice coefficient
                 pred_masks = (torch.sigmoid(pred_masks) > 0.5).float()
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
-                dice_score += dice_coeff(pred_masks, true_masks, reduce_batch_first=False)
+                dice_score += dice_coeff(
+                    pred_masks, true_masks, reduce_batch_first=False
+                )
 
     # Revert network to training
     net.train()
@@ -74,8 +96,30 @@ def validate_unet(net, dataloader, device, amp=False):
     )
 
 
-def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_workers: int,
-              batch_size: int, threshold: float = 0.5, amp: bool = False):
+def test_unet(
+    device: torch.device,
+    net: Unet,
+    test_dir: str,
+    experiment_id: str,
+    num_workers: int,
+    batch_size: int,
+    threshold: float = 0.5,
+    amp: bool = False,
+) -> None:
+    """
+    Test loop for SealNet2. Compares mosaics for entire testing scenes to scene-level groundtruth
+    masks to get a real-world estimate for instance f-1 score. Statistics are saved directly to
+    wandb project.
+
+    :param device: device for running test
+    :param net: pytorch model predicting masks and counts
+    :param test_dir: directory with test set
+    :param experiment_id: experiment id for saving statistics
+    :param num_workers: number of workers for dataloader
+    :param batch_size: batch size for dataloader
+    :param threshold: threshold for binarizing output masks (applied after sigmoid transform)
+    :param amp: use auto-mixed precision?
+    """
     # Resume experiment
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
@@ -87,10 +131,12 @@ def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_wor
     fn = 0
 
     # Create Dataloader for test scenes
-    test_loader = DataLoader(dataset=TestDataset(f"{test_dir}/x"),
-                             num_workers=num_workers,
-                             batch_size=batch_size,
-                             shuffle=False)
+    test_loader = DataLoader(
+        dataset=TestDataset(f"{test_dir}/x"),
+        num_workers=num_workers,
+        batch_size=batch_size,
+        shuffle=False,
+    )
 
     # Put model in eval mode
     net = net.eval()
@@ -117,10 +163,12 @@ def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_wor
     # Merge output for each scene and match with GT mask
     for scene in os.listdir(out_folder):
         stats_scene = scene_stats.loc[scene_stats.scene == scene]
-        mask_shape = (stats_scene.height, stats_scene.width)
-        pred_mask = merge_output(f"{out_folder}/{scene}", mask_shape)
+        mask_shape = (int(stats_scene.height), int(stats_scene.width))
+        pred_mask = merge_output(mask_shape, f"{out_folder}/{scene}")
         true_mask = cv2.imread(f"{test_dir}/y/{scene}", 0)
-        tp_scene, fp_scene, fn_scene = match_polygons(true_mask=true_mask, pred_mask=pred_mask)
+        tp_scene, fp_scene, fn_scene = match_polygons(
+            true_mask=true_mask, pred_mask=pred_mask
+        )
 
         tp += tp_scene
         fp += fp_scene
@@ -142,4 +190,3 @@ def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_wor
 
     # Remove temp folders
     shutil.rmtree(out_folder)
-

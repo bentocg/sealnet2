@@ -1,12 +1,21 @@
 __all__ = ["merge_output"]
 
+from typing import Tuple
 
 import numpy as np
 import cv2
 import os
 
 
-def merge_output(shape, tiles_dir):
+def merge_output(shape: Tuple[int, int], tiles_dir: str) -> np.ndarray:
+    """
+    Merges outputs for a scene into a mosaic by averaging pixel-level predictions across the scene.
+
+    :param shape: (height, width) for input scene
+    :param tiles_dir: directory with predicted tiles
+
+    :return: numpy array with output mosaic
+    """
     final_output = np.zeros(shape, dtype=np.uint8)
     denominator = np.zeros(shape, dtype=np.uint8)
     for ele in os.listdir(tiles_dir):

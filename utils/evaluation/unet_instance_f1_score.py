@@ -1,5 +1,4 @@
 
-import cv2
 import torch
 import numpy as np
 
@@ -66,7 +65,20 @@ def unet_instance_f1_score(
     pred_counts: torch.float32,
     matching_tolerance: int = 3,
     max_pred_count: int = 30,
-):
+) -> (float, float, float):
+    """
+    Uses predicted counts to extract hotspot locations in predicted masks.
+
+    :param true_masks: binary array with locations of true seal centroids
+    :param true_counts: list of true seal counts per image
+    :param pred_masks: array with pixel-level predicted seal centroid probabilities
+    :param pred_counts: list of predicted seal counts per image
+    :param matching_tolerance: maximum distance for considering a predicted and a GT point a match
+    :param max_pred_count: maximum count for a patch
+
+    :return: f1 score, precision and recall, respectively
+    """
+
     # Store results
     fn = 0
     fp = 0
@@ -85,6 +97,7 @@ def unet_instance_f1_score(
     for idx, gt_points in enumerate(ground_truth_xy):
         n_matches = 0
         if len(gt_points) == 0:
+
             fp += len(pred_xy[idx])
         else:
             matched_gt = set([])
@@ -123,8 +136,19 @@ def unet_instance_f1_score_thresh(
     pred_masks: torch.float32,
     true_counts: torch.float32,
     pred_counts: torch.float32,
-    threshold: 0.5,
-):
+    threshold: float = 0.5,
+) -> (float, float, float, float):
+    """
+    Thresholds output to compare predicted polygons and true polygons.
+
+    :param true_masks: binary array with locations of true seal centroids
+    :param true_counts: list of true seal counts per image
+    :param pred_masks: array with pixel-level predicted seal centroid probabilities
+    :param pred_counts: list of predicted seal counts per image
+    :param threshold: threshold for binarizing predicted mask (applied after sigmoid transform)
+
+    :return:  f1 score, precision, recall, and MAE between predicted and true counts, respectively
+    """
     # Get count mean absolute error
     count_mae = (true_counts - pred_counts).abs().mean()
 

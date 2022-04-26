@@ -1,16 +1,14 @@
 import os
 import sys
-from itertools import product
 
 import cv2
 import numpy as np
-import pandas as pd
 import rasterio
 import geopandas as gpd
 from argparse import ArgumentParser
 
 sys.path.insert(0, "..")
-from utils.data_processing import Tiff
+from utils.data_processing import Tiff, tile_image, store_scene_stats
 
 
 def parse_args():
@@ -88,39 +86,13 @@ def main():
             print(f"Scene {scene} not present in directory {args.scenes_dir}.")
             continue
 
-        # Save scene transform, width and height to test set
-        transform_coords = [
-            transform.a,
-            transform.b,
-            transform.c,
-            transform.d,
-            transform.e,
-            transform.f,
-        ]
-        if os.path.exists(f"{args.output_dir}/scene_stats.csv"):
-            with open(f"{args.output_dir}/scene_stats.csv", "a") as file:
-                file.write(
-                    ",".join(
-                        [str(ele) for ele in [scene, width, height] + transform_coords]
-                    )
-                    + "\n"
-                )
-        else:
-            stats = pd.DataFrame(
-                {
-                    "scene": scene,
-                    "width": width,
-                    "height": height,
-                    "transform_a": transform.a,
-                    "transform_b": transform.b,
-                    "transform_c": transform.c,
-                    "transform_d": transform.d,
-                    "transform_e": transform.e,
-                    "transform_f": transform.f,
-                },
-                index=[0],
-            )
-            stats.to_csv(f"{args.output_dir}/scene_stats.csv", index=False)
+        store_scene_stats(
+            scene=scene,
+            width=width,
+            height=height,
+            transform=transform,
+            out_path=f"{args.output_dir}/scene_stats.csv",
+        )
 
         # Create test mask for input scene
         scene_mask = np.zeros((height, width), dtype=np.uint8)
@@ -142,62 +114,35 @@ def main():
         del scene_mask  # Free up memory
 
         # Tile input scene
-        for left, down in product(
-            range(0, height, int(args.patch_size * args.stride)),
-            range(0, width, int(args.patch_size * args.stride)),
-        ):
+        tile_image(
+            img=img,
+            patch_size=args.patch_size,
+            stride=args.stride,
+            scene=scene,
+            out_dir=f"{args.output_dir}/x",
+        )
 
-            # Make sure patches don't overflow
-            if left > height - args.patch_size:
-                left = height - args.patch_size
-            if down > width - args.patch_size:
-                down = width - args.patch_size
-            right, top = left + args.patch_size, down + args.patch_size
+    # Loop through negative scenes
+    neg_scenes = [
+        ele for ele in os.listdir(args.test_neg_scenes_dir) if ele.endswith(".tif")
+    ]
+    for scene in neg_scenes:
+        img, width, height, transform, meta = tiff.process_raster(
+            f"{args.test_neg_scenes_dir}/{scene}"
+        )
 
-            # Create filename
-            filename = (
-                f"{args.output_dir}/x/{scene[:-4]}_{left}_{down}_{right}_{top}.tif"
-            )
-            crop = img[0, left : left + args.patch_size, down : down + args.patch_size]
+        # Store scene stats
+        store_scene_stats(scene=scene, width=width, height=height, transform=transform,
+                          out_path=f"{args.output_dir}/scene_stats.csv")
 
-            # Check if crop has non-missing data
-            if crop.sum() == 0:
-                continue
-
-            # Save tile
-            cv2.imwrite(filename, crop)
-
-        # Loop through negative scenes
-        neg_scenes = [
-            ele for ele in os.listdir(args.test_neg_scenes_dir) if ele.endswith(".tif")
-        ]
-        for scene in neg_scenes:
-            img, width, height, transform, meta = tiff.process_raster(
-                f"{args.test_neg_scenes_dir}/{scene}"
-            )
-
-            for left, down in product(
-                range(0, height, int(args.patch_size * args.stride)),
-                range(0, width, int(args.patch_size * args.stride)),
-            ):
-                if left > height - args.patch_size:
-                    left = height - args.patch_size
-                if down > width - args.patch_size:
-                    down = width - args.patch_size
-
-                right, top = left + args.patch_size, down + args.patch_size
-                filename = (
-                    f"{args.output_dir}/x/{scene[:-4]}_{left}_{down}_{right}_{top}.tif"
-                )
-                crop = img[
-                    0, left : left + args.patch_size, down : down + args.patch_size
-                ]
-
-                # Check if crop has non-missing data
-                if crop.sum() == 0:
-                    continue
-
-                cv2.imwrite(filename, crop)
+        # Tile input scene
+        tile_image(
+            img=img,
+            patch_size=args.patch_size,
+            stride=args.stride,
+            scene=scene,
+            out_dir=f"{args.output_dir}/x",
+        )
 
 
 if __name__ == "__main__":

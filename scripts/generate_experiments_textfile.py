@@ -3,9 +3,17 @@ from scipy.stats import loguniform
 import uuid
 
 
-def main():
+def main(n_experiments: int = 3000):
+    """
+    Create a textfile with hyperparameter combinations to be tested. Training job reads one line
+    at a time, removing it after reading so multiple training experiments can be run simultaneously.
+    """
+
     experiments = []
-    for _ in range(3000):
+
+    # Sample a combinations of hyperparameters
+    for _ in range(n_experiments):
+
         experiment_id = str(uuid.uuid4())
         uniform_weights = str(np.random.randint(0, 2))
         count_alpha = str(np.random.uniform(0, 0.9))
@@ -36,6 +44,7 @@ def main():
             ) + "\n"
         )
 
+    # Write experiments to file
     with open("experiments_to_process.txt", "w") as file:
         for line in experiments:
             file.write(line)

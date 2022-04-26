@@ -66,6 +66,9 @@ def parse_args():
 
 
 def main():
+    """
+    Generates training set from shapefile points and scene rasters.
+    """
     args = parse_args()
 
     # Max tries for negative tiles generation
