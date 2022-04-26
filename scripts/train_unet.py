@@ -133,6 +133,14 @@ def get_args():
         default=3,
         help="Number of validation rounds per epoch",
     )
+    parser.add_argument(
+        "--data-parallel",
+        "-dp",
+        dest="data_parallel",
+        default=False,
+        help="Use data parallelism? (multi-gpu)"
+
+    )
 
     return parser.parse_args()
 
@@ -382,6 +390,10 @@ if __name__ == "__main__":
         logging.info(f"Model loaded from {args.load}")
 
     net.to(device=device)
+
+    if args.data_parallel:
+        device_ids = [int(ele) for ele in args.data_parallel.split("_")]
+        net = nn.DataParallel(net, device_ids=device_ids)
 
     # Set random seed
     seed_all(0)
