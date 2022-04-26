@@ -107,7 +107,7 @@ def get_args():
         help="Augmentation mode",
     )
     parser.add_argument(
-        "--amp", "-m", default=False, help="Use mixed precision"
+        "--amp", "-m", type=bool, default=False, help="Use mixed precision"
     )
     parser.add_argument(
         "--criterion-mask",
