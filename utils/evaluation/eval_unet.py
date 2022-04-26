@@ -15,7 +15,7 @@ from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thres
 from utils.evaluation.dice_score import dice_coeff
 
 
-def validate_unet(net, dataloader, device):
+def validate_unet(net, dataloader, device, amp=False):
     net.eval()
     num_val_batches = len(dataloader)
     f1_score = 0
@@ -35,27 +35,28 @@ def validate_unet(net, dataloader, device):
         # Move images and labels to correct device and type
         images = images.to(device=device, dtype=torch.float32)
 
-        with torch.no_grad():
-            # Predict the mask and count
-            pred_masks, pred_counts = net(images)
+        with torch.cuda.amp.autocast(enabled=amp):
+            with torch.no_grad():
+                # Predict the mask and count
+                pred_masks, pred_counts = net(images)
 
-            # Calculate instance level f1 score after thresholding
-            batch_f1, batch_precision, batch_recall, batch_mae = unet_instance_f1_score_thresh(
-                true_masks=true_masks,
-                true_counts=true_counts,
-                pred_masks=pred_masks,
-                pred_counts=pred_counts,
-                threshold=0.5
-            )
-            f1_score += batch_f1
-            precision += batch_precision
-            recall += batch_recall
-            count_mae += batch_mae
+                # Calculate instance level f1 score after thresholding
+                batch_f1, batch_precision, batch_recall, batch_mae = unet_instance_f1_score_thresh(
+                    true_masks=true_masks,
+                    true_counts=true_counts,
+                    pred_masks=pred_masks,
+                    pred_counts=pred_counts,
+                    threshold=0.5
+                )
+                f1_score += batch_f1
+                precision += batch_precision
+                recall += batch_recall
+                count_mae += batch_mae
 
-            # Calculate dice coefficient
-            pred_masks = (torch.sigmoid(pred_masks) > 0.5).float()
-            true_masks = true_masks.to(device=device, dtype=torch.float32)
-            dice_score += dice_coeff(pred_masks, true_masks, reduce_batch_first=False)
+                # Calculate dice coefficient
+                pred_masks = (torch.sigmoid(pred_masks) > 0.5).float()
+                true_masks = true_masks.to(device=device, dtype=torch.float32)
+                dice_score += dice_coeff(pred_masks, true_masks, reduce_batch_first=False)
 
     # Revert network to training
     net.train()
@@ -73,7 +74,7 @@ def validate_unet(net, dataloader, device):
 
 
 def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_workers: int,
-              batch_size: int, threshold: float = 0.5):
+              batch_size: int, threshold: float = 0.5, amp: bool = False):
     # Resume experiment
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
@@ -101,16 +102,16 @@ def test_unet(device, net: nn.Module, test_dir: str, experiment_id: str, num_wor
     for images, image_names in test_loader:
 
         images = images.to(device)
-        with torch.no_grad():
-            outputs, _ = net(images)
+        with torch.cuda.amp.autocast(enabled=amp):
+            with torch.no_grad():
+                outputs, _ = net(images)
 
-            # Threshold output
-            outputs = torch.sigmoid(outputs)
-            outputs = (outputs > threshold).squeeze(1).detach().float() * 255
+                # Threshold output
+                outputs = torch.sigmoid(outputs)
+                outputs = (outputs > threshold).squeeze(1).detach().float() * 255
 
-            # Save output
-            write_output(outputs, image_names, out_folder)
-
+                # Save output
+                write_output(outputs, image_names, out_folder)
 
     # Merge output for each scene and match with GT mask
     for scene in os.listdir(out_folder):

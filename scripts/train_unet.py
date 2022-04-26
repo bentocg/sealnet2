@@ -292,15 +292,15 @@ def train_net(
                 division_step = n_train // (batch_size * val_rounds_per_epoch)
                 if division_step > 0:
                     if global_step % division_step == 0:
-
-                        (
-                            f1_score,
-                            precision,
-                            recall,
-                            dice_score,
-                            count_mae,
-                        ) = validate_unet(net, val_loader, device)
-                        scheduler.step(f1_score)
+                        with torch.cuda.amp.autocast(enabled=amp):
+                            (
+                                f1_score,
+                                precision,
+                                recall,
+                                dice_score,
+                                count_mae,
+                            ) = validate_unet(net, val_loader, device)
+                            scheduler.step(f1_score)
 
                         logging.info("Validation F1 score: {}".format(f1_score))
                         grid_size = 6
@@ -429,7 +429,8 @@ if __name__ == "__main__":
             test_dir="../training_set/test",
             experiment_id=args.experiment_id,
             batch_size=args.batch_size * 2,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            amp=args.amp
         )
         logging.info("Testing complete saving model checkpoint")
 
