@@ -230,6 +230,9 @@ def train_net(
             augmentation_mode=augmentation_mode,
             save_checkpoint=save_checkpoint,
             neg_to_pos_ratio=neg_to_pos_ratio,
+            uniform_group_weights=uniform_group_weights,
+            alpha_count=alpha_count,
+            patience=patience,
             amp=amp,
         )
     )
