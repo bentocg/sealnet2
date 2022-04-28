@@ -142,7 +142,6 @@ def get_args():
         help="Use data parallelism? (multi-gpu)"
 
     )
-
     return parser.parse_args()
 
 
@@ -220,7 +219,7 @@ def train_net(
 
     # Initialize logging
     experiment = wandb.init(
-        project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
+        project="SealNet2.0", resume="allow", anonymous="allow", id=experiment_id
     )
     experiment.config.update(
         dict(
