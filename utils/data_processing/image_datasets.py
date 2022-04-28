@@ -1,5 +1,7 @@
 __all__ = ["SealsDataset", "TestDataset"]
 
+import gc
+
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
@@ -83,6 +85,7 @@ class SealsDataset(Dataset):
                         mask = mask_aug
                         del img_aug
                         del mask_aug
+                        gc.collect()
                         break
 
         if mask.sum() == 0:

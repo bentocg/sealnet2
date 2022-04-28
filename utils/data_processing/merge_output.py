@@ -21,7 +21,7 @@ def merge_output(shape: Tuple[int, int], tiles_dir: str) -> np.ndarray:
     for ele in os.listdir(tiles_dir):
         left, down, right, top = ele.split("_")[-4:]
         top = top.split(".")[0]
-        tile_out = cv2.imread(f"{tiles_dir}/{ele}", cv2.IMREAD_GRAYSCALE)
+        tile_out = cv2.imread(f"{tiles_dir}/{ele}", cv2.IMREAD_GRAYSCALE).astype(np.uint8)
         final_output[int(left) : int(right), int(down) : int(top)] += tile_out
         denominator[int(left) : int(right), int(down) : int(top)] += 1
     denominator[denominator == 0] = 1
