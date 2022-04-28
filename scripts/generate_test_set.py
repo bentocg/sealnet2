@@ -1,3 +1,4 @@
+import gc
 import os
 import sys
 
@@ -112,6 +113,7 @@ def main():
         # Save scene mask
         cv2.imwrite(f"{args.output_dir}/y/{scene}", scene_mask)
         del scene_mask  # Free up memory
+        gc.collect()
 
         # Tile input scene
         tile_image(
