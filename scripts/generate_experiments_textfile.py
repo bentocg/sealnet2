@@ -14,7 +14,6 @@ def main(n_experiments: int = 3000):
     # Sample a combinations of hyperparameters
     for _ in range(n_experiments):
 
-        experiment_id = str(uuid.uuid4())
         uniform_weights = str(np.random.randint(0, 2))
         count_alpha = str(np.random.uniform(0, 0.9))
         neg_to_pos_ratio = str(np.random.uniform(0, 1.0))
@@ -34,7 +33,6 @@ def main(n_experiments: int = 3000):
         experiments.append(
             " ".join(
                 [
-                    experiment_id,
                     uniform_weights,
                     count_alpha,
                     neg_to_pos_ratio,

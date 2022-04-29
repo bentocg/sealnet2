@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Union
 
@@ -418,6 +419,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device {device}")
+    experiment_id = str(uuid.uuid4())
 
     # Make sure criterion for masks is valid
     assert args.criterion_mask in [
@@ -470,7 +472,7 @@ if __name__ == "__main__":
             uniform_group_weights=args.uniform_group_weights,
             patch_size=args.patch_size,
             num_workers=args.num_workers,
-            experiment_id=args.experiment_id,
+            experiment_id=experiment_id,
             batch_size=args.batch_size,
             criterion_mask=criterion_mask,
             neg_to_pos_ratio=args.neg_to_pos_ratio,
@@ -490,7 +492,7 @@ if __name__ == "__main__":
             device=device,
             net=net,
             test_dir="../training_set/test",
-            experiment_id=args.experiment_id,
+            experiment_id=experiment_id,
             batch_size=args.batch_size * 2,
             num_workers=args.num_workers,
             amp=args.amp,
@@ -503,7 +505,7 @@ if __name__ == "__main__":
 
         # Save model checkpoint
         os.makedirs("../checkpoints", exist_ok=True)
-        torch.save(net.state_dict(), f"../checkpoints/{args.experiment_id}.pth")
+        torch.save(net.state_dict(), f"../checkpoints/{experiment_id}.pth")
     except KeyboardInterrupt:
         logging.info("Testing interruped")
         sys.exit(0)
