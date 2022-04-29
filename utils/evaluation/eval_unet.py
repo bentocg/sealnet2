@@ -1,5 +1,6 @@
 import os
 import shutil
+from typing import Union
 
 import affine
 import cv2
@@ -8,7 +9,7 @@ import pandas as pd
 import torch
 import wandb
 from fiona.crs import from_epsg
-from prompt_toolkit.data_structures import Point
+from shapely.geometry import Point
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segmentation_models_pytorch import Unet
@@ -16,13 +17,14 @@ import geopandas as gpd
 
 from utils.data_processing import TestDataset
 from utils.evaluation.extract_centroids import extract_centroids
-from utils.evaluation.polygon_matching import match_polygons, match_points
+from utils.evaluation.polygon_matching import match_points
 from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thresh
 from utils.evaluation.dice_score import dice_coeff
+from utils.models.transunet import TransUnet
 
 
 def validate_unet(
-    net: Unet, dataloader: DataLoader, device: torch.device, amp: bool = False
+    net: Union[Unet, TransUnet], dataloader: DataLoader, device: torch.device, amp: bool = False
 ) -> (float, float, float, float, float):
     """
     Validation loop for SealNet2. Matches predicted polygons to ground truth polygons to get
@@ -103,7 +105,7 @@ def validate_unet(
 
 def test_unet(
     device: torch.device,
-    net: Unet,
+    net: Union[Unet, TransUnet],
     test_dir: str,
     experiment_id: str,
     num_workers: int,
@@ -159,6 +161,7 @@ def test_unet(
     pred_point_scenes = []
 
     # Loop through dataloader
+
     for images, image_names in test_loader:
 
         images = images.to(device)
@@ -195,7 +198,7 @@ def test_unet(
                                     idx,
                                     max(0, x - 1) : x + 2,
                                     y - 1 : min(y + 2, outputs[idx].shape[-1]),
-                                ].mean()
+                                ].sum()
                             )
                             pred_point_scenes.append(scene)
 
@@ -209,33 +212,32 @@ def test_unet(
         },
         crs=from_epsg(3031),
     )
+    preds_gdf.to_file("preds_shape.shp")
 
     # Read groundtruth gdf
     gt_gdf = gpd.read_file(ground_truth_gdf)
 
     # Run non-maximum suppression
-    for scene in preds_gdf.scene.unique():
-        to_drop = []
+    for scene in gt_gdf.scene.unique():
+        gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
+        if scene not in preds_gdf.scene.unique():
+            fn += len(gt_points_scene)
+            continue
         points_scene = preds_gdf.loc[preds_gdf.scene == scene]
         points_scene = points_scene.sort_values(
             by="support", ascending=False
         ).reset_index()
-        count = 0
-        while count < len(points_scene) - 1:
-            if (
-                points_scene.iloc[idx]["geometry"].distance(
-                    points_scene.iloc[idx + 1]["geometry"]
-                )
-                < nms_distance
-            ):
-                to_drop.append(points_scene.iloc[idx]["id"])
-                count += 2
-            else:
-                count += 1
-        points_scene = points_scene.loc[~(points_scene.id.isin(to_drop))]
+        to_keep = set([])
+        while True:
+            if len(points_scene) < 2:
+                break
+            curr = points_scene.iloc[0]["geometry"]
+            to_keep.add(points_scene.iloc[0]["ids"])
+            curr_pol = curr.buffer(nms_distance)
+            points_scene = points_scene.loc[~(points_scene.geometry.intersects(curr_pol))]
+        points_scene = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
 
         # Compare with groundtruth
-        gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
         scene_tp, scene_fp, scene_fn = match_points(
             gt_points_scene.geometry.values,
             points_scene.geometry.values,
