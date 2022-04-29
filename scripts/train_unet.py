@@ -467,6 +467,7 @@ if __name__ == "__main__":
             epochs=args.epochs,
             alpha_count=args.alpha_count,
             uniform_group_weights=args.uniform_group_weights,
+            augmentation_mode=args.augmentation_mode,
             patch_size=args.patch_size,
             num_workers=args.num_workers,
             experiment_id=experiment_id,
