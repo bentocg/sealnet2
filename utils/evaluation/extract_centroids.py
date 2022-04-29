@@ -27,9 +27,15 @@ def extract_centroids(pred_mask: np.ndarray) -> List[Tuple]:
     if pred_contours:
 
         # Convert into polygon centroids
-        pred_centroids = [Polygon(coords).buffer(0).centroid for coords in pred_contours]
+        pred_centroids = [
+            Polygon(coords).buffer(0).centroid for coords in pred_contours
+        ]
 
         # Extract coordinates
-        pred_centroids = [(pnt.coords.xy[0][0], pnt.coords.xy[1][0]) for pnt in pred_centroids]
+        pred_centroids = [
+            (pnt.coords.xy[0][0], pnt.coords.xy[1][0])
+            for pnt in pred_centroids
+            if pnt.coords  # Make sure points are valid
+        ]
 
     return pred_centroids
