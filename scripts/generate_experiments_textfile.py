@@ -28,8 +28,9 @@ def main(n_experiments: int = 3000):
                 "Mixed",
             ]
         )
-        learning_rate = str(loguniform.rvs(1e-5, 1e-3))
+        learning_rate = str(loguniform.rvs(1e-5, 1e-2))
         model_architecture = np.random.choice(["Unet", "TransUnet"])
+        dropout_regression = str(np.random.uniform(0, 0.35))
         experiments.append(
             " ".join(
                 [
@@ -41,7 +42,8 @@ def main(n_experiments: int = 3000):
                     loss_mask,
                     learning_rate,
                     patience,
-                    model_architecture
+                    model_architecture,
+                    dropout_regression
                 ]
             ) + "\n"
         )

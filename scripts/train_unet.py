@@ -148,7 +148,20 @@ def get_args():
         default="../shapefiles/seal-points-test-consensus.shp",
         help="Path to shapefile with test GT points",
     )
-    parser.add_argument("--model-architecture", "-ma", dest="model_architecture")
+    parser.add_argument(
+        "--model-architecture",
+        "-ma",
+        dest="model_architecture",
+        type=str,
+        default="Unet",
+    )
+    parser.add_argument(
+        "--dropout-regression",
+        "-dr",
+        dest="dropout_regression",
+        type=float,
+        default=0.0
+    )
     return parser.parse_args()
 
 
@@ -245,6 +258,8 @@ def train_net(
             alpha_count=alpha_count,
             patience=patience,
             amp=amp,
+            model_architecture=args.model_architecture,
+            dropout_regression=args.dropout_regression
         )
     )
 
@@ -421,22 +436,21 @@ if __name__ == "__main__":
         criterion_mask = MixedLoss()
 
     # Make sure model architecture is supported
-    assert args.model_architecture in ["Unet", "TransUnet"], f"Invalid model architecture: {args.model_architecture}."
+    assert args.model_architecture in [
+        "Unet",
+        "TransUnet",
+    ], f"Invalid model architecture: {args.model_architecture}."
 
     # Define parameters for classification head
-    aux_params = {"pooling": "avg", "classes": 1, "activation": nn.ReLU()}
+    aux_params = {"pooling": "avg", "classes": 1, "dropout": args.dropout_regression}
 
     if args.model_architecture == "Unet":
         net = smp.Unet(
             encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
         )
-    elif args.model_architecture == "TransUnet":
-        net = TransUnet(in_channels=1, classes=1, img_dim=args.patch_size)
-
-    # Load previous model
-    if args.load:
-        net.load_state_dict(torch.load(args.load, map_location=device))
-        logging.info(f"Model loaded from {args.load}")
+    else:
+        net = TransUnet(in_channels=1, classes=1, img_dim=args.patch_size,
+                        dropout_regression=args.dropout_regression)
 
     net.to(device=device)
 
