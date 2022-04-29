@@ -1,17 +1,22 @@
 import os
 import shutil
 
+import affine
 import cv2
+import numpy as np
 import pandas as pd
 import torch
 import wandb
-from torch import nn
+from fiona.crs import from_epsg
+from prompt_toolkit.data_structures import Point
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segmentation_models_pytorch import Unet
+import geopandas as gpd
 
-from utils.data_processing import TestDataset, write_output, merge_output
-from utils.evaluation.polygon_matching import match_polygons
+from utils.data_processing import TestDataset
+from utils.evaluation.extract_centroids import extract_centroids
+from utils.evaluation.polygon_matching import match_polygons, match_points
 from utils.evaluation.unet_instance_f1_score import unet_instance_f1_score_thresh
 from utils.evaluation.dice_score import dice_coeff
 
@@ -103,7 +108,10 @@ def test_unet(
     experiment_id: str,
     num_workers: int,
     batch_size: int,
+    ground_truth_gdf: str,
     threshold: float = 0.5,
+    nms_distance: float = 1.0,
+    match_distance: float = 1.5,
     amp: bool = False,
 ) -> None:
     """
@@ -125,11 +133,6 @@ def test_unet(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
     )
 
-    # Store statistics
-    tp = 0
-    fp = 0
-    fn = 0
-
     # Create Dataloader for test scenes
     test_loader = DataLoader(
         dataset=TestDataset(f"{test_dir}/x"),
@@ -138,14 +141,24 @@ def test_unet(
         shuffle=False,
     )
 
+    # Store Statistics
+    tp = 0
+    fp = 0
+    fn = 0
+    eps = 1e-8
+
     # Put model in eval mode
     net = net.eval()
 
     # Read scene stats csv
     scene_stats = pd.read_csv(f"{test_dir}/scene_stats.csv")
 
+    # Start shapefile for predictions
+    pred_points_support = []
+    pred_points = []
+    pred_point_scenes = []
+
     # Loop through dataloader
-    out_folder = f"{experiment_id}_temp_output"
     for images, image_names in test_loader:
 
         images = images.to(device)
@@ -154,32 +167,100 @@ def test_unet(
                 outputs, _ = net(images)
 
                 # Threshold output
-                outputs = torch.sigmoid(outputs)
-                outputs = (outputs > threshold).squeeze(1).detach().float() * 255
+                outputs = (
+                    torch.sigmoid(outputs).squeeze(1).detach().float().cpu().numpy()
+                    * 255
+                )
+                outputs_bin = (outputs > threshold).astype(np.uint8)
 
-                # Save output
-                write_output(outputs, image_names, out_folder)
+                # Extract predicted centroids and scene names
+                centroids = [extract_centroids(pred_mask) for pred_mask in outputs_bin]
+                scenes = [
+                    f"{'_'.join(os.path.basename(img_name).split('_')[:-4])}.tif"
+                    for img_name in image_names
+                ]
 
-    # Merge output for each scene and match with GT mask
-    for scene in os.listdir(out_folder):
-        stats_scene = scene_stats.loc[scene_stats.scene == scene]
-        mask_shape = (int(stats_scene.height), int(stats_scene.width))
-        pred_mask = merge_output(mask_shape, f"{out_folder}/{scene}")
-        true_mask = cv2.imread(f"{test_dir}/y/{scene}", 0)
-        tp_scene, fp_scene, fn_scene = match_polygons(
-            true_mask=true_mask, pred_mask=pred_mask
+                # Project centroids and store support level for each centroid for NMS
+                for idx, scene in enumerate(scenes):
+                    if centroids[idx]:
+                        transform_scene = affine.Affine(
+                            *scene_stats.loc[scene_stats.scene == scene].values[0, 3:]
+                        )
+                        for centroid in centroids[idx]:
+                            x, y = centroid
+                            pred_points.append(Point(*((x, y) * transform_scene)))
+                            x, y = int(round(x)), int(round(y))  # Convert to integer for indexing
+                            pred_points_support.append(
+                                outputs[
+                                    idx,
+                                    max(0, x - 1) : x + 2,
+                                    y - 1 : min(y + 2, outputs[idx].shape[-1]),
+                                ].mean()
+                            )
+                            pred_point_scenes.append(scene)
+
+    # Add points to shapefile
+    preds_gdf = gpd.GeoDataFrame(
+        {
+            "geometry": pred_points,
+            "scene": pred_point_scenes,
+            "support": pred_points_support,
+            "ids": list(range(len(pred_points))),
+        },
+        crs=from_epsg(3031),
+    )
+
+    # Read groundtruth gdf
+    gt_gdf = gpd.read_file(ground_truth_gdf)
+
+    # Run non-maximum suppression
+    for scene in preds_gdf.scene.unique():
+        to_drop = []
+        points_scene = preds_gdf.loc[preds_gdf.scene == scene]
+        points_scene = points_scene.sort_values(
+            by="support", ascending=False
+        ).reset_index()
+        count = 0
+        while count < len(points_scene) - 1:
+            if (
+                points_scene.iloc[idx]["geometry"].distance(
+                    points_scene.iloc[idx + 1]["geometry"]
+                )
+                < nms_distance
+            ):
+                to_drop.append(points_scene.iloc[idx]["id"])
+                count += 2
+            else:
+                count += 1
+        points_scene = points_scene.loc[~(points_scene.id.isin(to_drop))]
+
+        # Compare with groundtruth
+        gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
+        scene_tp, scene_fp, scene_fn = match_points(
+            gt_points_scene.geometry.values,
+            points_scene.geometry.values,
+            match_distance=match_distance,
+        )
+        tp += scene_tp
+        fp += scene_fp
+        fn += scene_fn
+
+        # Calculate scene statistics and store to wandb
+        precision = tp / (tp + fp + eps)
+        recall = tp / (tp + fn + eps)
+        f1 = 2 * (precision * recall / (precision + recall + eps))
+        experiment.log(
+            {
+                f"test instance f1 {scene}": f1,
+                f"test instance precision {scene}": precision,
+                f"test instance recall {scene}": recall,
+            }
         )
 
-        tp += tp_scene
-        fp += fp_scene
-        fn += fn_scene
-
-    # Store statistics
-    eps = 1e-8
+    # Calculate global test statistics and store to wandb
     precision = tp / (tp + fp + eps)
     recall = tp / (tp + fn + eps)
     f1 = 2 * (precision * recall / (precision + recall + eps))
-
     experiment.log(
         {
             "test instance f1": f1,
@@ -187,6 +268,3 @@ def test_unet(
             "test instance recall": recall,
         }
     )
-
-    # Remove temp folders
-    shutil.rmtree(out_folder)

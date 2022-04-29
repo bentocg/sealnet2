@@ -142,6 +142,13 @@ def get_args():
         help="Use data parallelism? (multi-gpu)"
 
     )
+    parser.add_argument(
+        "--test-gdf",
+        "-tgt",
+        dest="test_gdf",
+        default="../shapefiles/seal-points-consensus.shp",
+        help="Path to shapefile with test GT points"
+    )
     return parser.parse_args()
 
 
@@ -230,6 +237,7 @@ def train_net(
             save_checkpoint=save_checkpoint,
             neg_to_pos_ratio=neg_to_pos_ratio,
             uniform_group_weights=uniform_group_weights,
+            criterion_mask=args.criterion_mask,
             alpha_count=alpha_count,
             patience=patience,
             amp=amp,
@@ -369,6 +377,9 @@ def train_net(
                         # Check if f1-score improved, stop if it didn't for 15 validation rounds
                         if f1_score > best_f1:
                             best_f1 = f1_score
+                            experiment.log(
+                                {"best validation instance f1": best_f1}
+                            )
                             non_improving = 0
 
                         else:
@@ -458,7 +469,11 @@ if __name__ == "__main__":
             experiment_id=args.experiment_id,
             batch_size=args.batch_size * 2,
             num_workers=args.num_workers,
-            amp=args.amp
+            amp=args.amp,
+            threshold=0.5,
+            match_distance=1.5,
+            nms_distance=1.0,
+            ground_truth_gdf=args.test_gdf
         )
         logging.info("Testing complete saving model checkpoint")
 
