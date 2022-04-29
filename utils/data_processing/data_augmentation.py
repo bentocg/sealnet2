@@ -23,12 +23,10 @@ def train_transform(size, mode):
     elif mode == "complex":
         return A.Compose(
             [
-                A.RandomResizedCrop(
-                    height=int(size * 1.15),
-                    width=int(size * 1.15),
-                    scale=(0.15, 1.0),
-                    ratio=(0.75, 1.33),
+                A.ShiftScaleRotate(
+                    shift_limit=0.25, scale_limit=0.25, rotate_limit=15, p=0.5
                 ),
+                A.RandomCrop(height=size, width=size),
                 A.Rotate(limit=(-15, 15)),
                 A.OneOf(
                     [
@@ -60,7 +58,6 @@ def train_transform(size, mode):
                     p=0.4, hue_shift_limit=0, val_shift_limit=15, sat_shift_limit=0
                 ),
                 A.Flip(p=0.66),
-                A.CenterCrop(height=size, width=size),
                 A.Normalize(mean=0.5, std=0.25),
                 ToTensorV2(),
             ]
