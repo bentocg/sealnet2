@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.stats import loguniform
-import uuid
 
 
 def main(n_experiments: int = 3000):

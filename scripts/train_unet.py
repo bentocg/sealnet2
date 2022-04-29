@@ -58,9 +58,6 @@ def get_args():
         "--epochs", "-e", metavar="E", type=int, default=5, help="Number of epochs"
     )
     parser.add_argument(
-        "--experiment-id", "-i", type=str, default="test", help="Unique experiment id"
-    )
-    parser.add_argument(
         "--batch-size",
         "-b",
         dest="batch_size",
