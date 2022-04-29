@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, "../")
 
-
+from utils.models.transunet import TransUnet
 from utils.training.utility import seed_all
 from utils.data_processing import provider, inv_normalize
 from utils.loss_functions import SoftDiceLoss, FocalLoss, DiceLoss, MixedLoss
@@ -139,16 +139,16 @@ def get_args():
         "-dp",
         dest="data_parallel",
         default=False,
-        help="Use data parallelism? (multi-gpu)"
-
+        help="Use data parallelism? (multi-gpu)",
     )
     parser.add_argument(
         "--test-gdf",
         "-tgt",
         dest="test_gdf",
-        default="../shapefiles/seal-points-consensus.shp",
-        help="Path to shapefile with test GT points"
+        default="../shapefiles/seal-points-test-consensus.shp",
+        help="Path to shapefile with test GT points",
     )
+    parser.add_argument("--model-architecture", "-ma", dest="model_architecture")
     return parser.parse_args()
 
 
@@ -226,7 +226,11 @@ def train_net(
 
     # Initialize logging
     experiment = wandb.init(
-        project="SealNet2.0", resume="allow", anonymous="allow", entity="bentocg", id=experiment_id
+        project="SealNet2.0",
+        resume="allow",
+        anonymous="allow",
+        entity="bentocg",
+        id=experiment_id,
     )
     experiment.config.update(
         dict(
@@ -377,9 +381,7 @@ def train_net(
                         # Check if f1-score improved, stop if it didn't for 15 validation rounds
                         if f1_score > best_f1:
                             best_f1 = f1_score
-                            experiment.log(
-                                {"best validation instance f1": best_f1}
-                            )
+                            experiment.log({"best validation instance f1": best_f1})
                             non_improving = 0
 
                         else:
@@ -408,7 +410,7 @@ if __name__ == "__main__":
         "SoftDice",
         "Focal",
         "Mixed",
-    ], "Invalid Criterion choice."
+    ], f"Invalid Criterion choice: {args.criterion_mask}."
     if args.criterion_mask == "Dice":
         criterion_mask = DiceLoss()
     elif args.criterion_mask == "SoftDice":
@@ -418,10 +420,18 @@ if __name__ == "__main__":
     else:
         criterion_mask = MixedLoss()
 
-    # Define parameters for classification head
-    aux_params = {"pooling": "avg", "classes": 1}
+    # Make sure model architecture is supported
+    assert args.model_architecture in ["Unet", "TransUnet"], f"Invalid model architecture: {args.model_architecture}."
 
-    net = smp.Unet(encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params)
+    # Define parameters for classification head
+    aux_params = {"pooling": "avg", "classes": 1, "activation": nn.ReLU()}
+
+    if args.model_architecture == "Unet":
+        net = smp.Unet(
+            encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
+        )
+    elif args.model_architecture == "TransUnet":
+        net = TransUnet(in_channels=1, classes=1, img_dim=args.patch_size)
 
     # Load previous model
     if args.load:
@@ -473,7 +483,7 @@ if __name__ == "__main__":
             threshold=0.5,
             match_distance=1.5,
             nms_distance=1.0,
-            ground_truth_gdf=args.test_gdf
+            ground_truth_gdf=args.test_gdf,
         )
         logging.info("Testing complete saving model checkpoint")
 

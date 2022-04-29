@@ -29,6 +29,7 @@ def main(n_experiments: int = 3000):
             ]
         )
         learning_rate = str(loguniform.rvs(1e-5, 1e-3))
+        model_architecture = np.random.choice(["Unet", "TransUnet"])
         experiments.append(
             " ".join(
                 [
@@ -39,7 +40,8 @@ def main(n_experiments: int = 3000):
                     aug,
                     loss_mask,
                     learning_rate,
-                    patience
+                    patience,
+                    model_architecture
                 ]
             ) + "\n"
         )
