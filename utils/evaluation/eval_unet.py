@@ -24,7 +24,10 @@ from utils.models.transunet import TransUnet
 
 
 def validate_unet(
-    net: Union[Unet, TransUnet], dataloader: DataLoader, device: torch.device, amp: bool = False
+    net: Union[Unet, TransUnet],
+    dataloader: DataLoader,
+    device: torch.device,
+    amp: bool = False,
 ) -> (float, float, float, float, float):
     """
     Validation loop for SealNet2. Matches predicted polygons to ground truth polygons to get
@@ -182,6 +185,10 @@ def test_unet(
                     f"{'_'.join(os.path.basename(img_name).split('_')[:-4])}.tif"
                     for img_name in image_names
                 ]
+                corners = [
+                    os.path.basename(img_name).split("_")[-4:-2]
+                    for img_name in image_names
+                ]
 
                 # Project centroids and store support level for each centroid for NMS
                 for idx, scene in enumerate(scenes):
@@ -189,10 +196,14 @@ def test_unet(
                         transform_scene = affine.Affine(
                             *scene_stats.loc[scene_stats.scene == scene].values[0, 3:]
                         )
+                        left, down = corners[idx]
                         for centroid in centroids[idx]:
                             x, y = centroid
+                            x, y = x + int(left), y + int(down)
                             pred_points.append(Point(*((x, y) * transform_scene)))
-                            x, y = int(round(x)), int(round(y))  # Convert to integer for indexing
+                            x, y = int(round(x)), int(
+                                round(y)
+                            )  # Convert to integer for indexing
                             pred_points_support.append(
                                 outputs[
                                     idx,
@@ -234,7 +245,9 @@ def test_unet(
             curr = points_scene.iloc[0]["geometry"]
             to_keep.add(points_scene.iloc[0]["ids"])
             curr_pol = curr.buffer(nms_distance)
-            points_scene = points_scene.loc[~(points_scene.geometry.intersects(curr_pol))]
+            points_scene = points_scene.loc[
+                ~(points_scene.geometry.intersects(curr_pol))
+            ]
         points_scene = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
 
         # Compare with groundtruth
