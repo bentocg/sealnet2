@@ -27,7 +27,15 @@ def main(n_experiments: int = 3000):
             ]
         )
         learning_rate = str(loguniform.rvs(1e-5, 1e-2))
-        model_architecture = np.random.choice(["Unet", "TransUnet"])
+        model_architecture = np.random.choice(
+            [
+                "UnetEfficientNet-b3",
+                "UnetEfficientNet-b2",
+                "UnetEfficientNet-b1",
+                "UnetEfficientNet-b0",
+                "UnetResnet34",
+            ]
+        )
         dropout_regression = str(np.random.uniform(0, 0.35))
         experiments.append(
             " ".join(
@@ -40,9 +48,10 @@ def main(n_experiments: int = 3000):
                     learning_rate,
                     patience,
                     model_architecture,
-                    dropout_regression
+                    dropout_regression,
                 ]
-            ) + "\n"
+            )
+            + "\n"
         )
 
     # Write experiments to file

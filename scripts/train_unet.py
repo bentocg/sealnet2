@@ -151,7 +151,7 @@ def get_args():
         "-ma",
         dest="model_architecture",
         type=str,
-        default="Unet",
+        default="UnetResnet34",
     )
     parser.add_argument(
         "--dropout-regression",
@@ -436,20 +436,40 @@ if __name__ == "__main__":
 
     # Make sure model architecture is supported
     assert args.model_architecture in [
-        "Unet",
+        "UnetEfficientNet-b3",
+        "UnetEfficientNet-b2",
+        "UnetEfficientNet-b1",
+        "UnetEfficientNet-b0",
+        "UnetResnet34",
         "TransUnet",
     ], f"Invalid model architecture: {args.model_architecture}."
 
     # Define parameters for classification head
     aux_params = {"pooling": "avg", "classes": 1, "dropout": args.dropout_regression}
 
-    if args.model_architecture == "Unet":
+    if args.model_architecture == "UnetEfficientNet-b0":
+        net = smp.Unet(
+            encoder_name="efficientnet-b0", in_channels=1, aux_params=aux_params
+        )
+    elif args.model_architecture == "UnetEfficientNet-b1":
+        net = smp.Unet(
+            encoder_name="efficientnet-b1", in_channels=1, aux_params=aux_params
+        )
+    elif args.model_architecture == "UnetEfficientNet-b2":
+        net = smp.Unet(
+            encoder_name="efficientnet-b2", in_channels=1, aux_params=aux_params
+        )
+    elif args.model_architecture == "UnetEfficientNet-b3":
         net = smp.Unet(
             encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
         )
-    else:
+    elif args.model_architecture == "TransUnet":
         net = TransUnet(in_channels=1, classes=1, img_dim=args.patch_size,
                         dropout_regression=args.dropout_regression)
+    else:
+        net = smp.Unet(
+            encoder_name="resnet34", in_channels=1, aux_params=aux_params
+        )
 
     net.to(device=device)
 
