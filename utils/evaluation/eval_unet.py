@@ -133,6 +133,7 @@ def test_unet(
     :param threshold: threshold for binarizing output masks (applied after sigmoid transform)
     :param amp: use auto-mixed precision?
     """
+
     # Resume experiment
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
@@ -153,7 +154,7 @@ def test_unet(
     eps = 1e-8
 
     # Put model in eval mode
-    net = net.eval()
+    net.eval()
 
     # Read scene stats csv
     scene_stats = pd.read_csv(f"{test_dir}/scene_stats.csv")
@@ -200,7 +201,7 @@ def test_unet(
                         for centroid in centroids[idx]:
                             x, y = centroid
                             x, y = x + int(left), y + int(down)
-                            pred_points.append(Point(*((x, y) * transform_scene)))
+                            pred_points.append(Point(*((y, x) * transform_scene)))
                             x, y = int(round(x)), int(
                                 round(y)
                             )  # Convert to integer for indexing
@@ -229,6 +230,7 @@ def test_unet(
     gt_gdf = gpd.read_file(ground_truth_gdf)
 
     # Run non-maximum suppression
+    to_keep = set([])
     for scene in gt_gdf.scene.unique():
         gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
         if scene not in preds_gdf.scene.unique():
@@ -238,7 +240,6 @@ def test_unet(
         points_scene = points_scene.sort_values(
             by="support", ascending=False
         ).reset_index()
-        to_keep = set([])
         while True:
             if len(points_scene) < 2:
                 break
@@ -248,7 +249,9 @@ def test_unet(
             points_scene = points_scene.loc[
                 ~(points_scene.geometry.intersects(curr_pol))
             ]
-        points_scene = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
+        points_scene = preds_gdf.loc[
+            (preds_gdf.ids.isin(to_keep)) & (preds_gdf.scene == scene)
+        ]
 
         # Compare with groundtruth
         scene_tp, scene_fp, scene_fn = match_points(
@@ -271,6 +274,11 @@ def test_unet(
                 f"test instance recall {scene}": recall,
             }
         )
+
+    # Store predictions
+    os.makedirs("predicted_shapefiles", exist_ok=True)
+    preds_gdf = preds_gdf.loc[preds_gdf.isin(to_keep)]
+    preds_gdf.to_file(f"{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
     precision = tp / (tp + fp + eps)
