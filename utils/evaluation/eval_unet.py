@@ -264,8 +264,8 @@ def test_unet(
         fn += scene_fn
 
         # Calculate scene statistics and store to wandb
-        precision = tp / (tp + fp + eps)
-        recall = tp / (tp + fn + eps)
+        precision = scene_tp / (scene_tp + scene_fp + eps)
+        recall = scene_tp / (scene_tp + scene_fn + eps)
         f1 = 2 * (precision * recall / (precision + recall + eps))
         experiment.log(
             {
