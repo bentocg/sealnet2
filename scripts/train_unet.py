@@ -13,11 +13,13 @@ import torchvision
 import wandb
 from torch import optim
 from tqdm import tqdm
+import ttach as tta
 
+from utils.models.model_factory import model_factory
+from utils.models.transunet import TransUnet
 
 sys.path.insert(0, "../")
 
-from utils.models.transunet import TransUnet
 from utils.training.utility import seed_all
 from utils.data_processing import provider, inv_normalize
 from utils.loss_functions import SoftDiceLoss, FocalLoss, DiceLoss, MixedLoss
@@ -152,19 +154,29 @@ def get_args():
         dest="model_architecture",
         type=str,
         default="UnetResnet34",
+        help="Model architecture name"
     )
     parser.add_argument(
         "--dropout-regression",
         "-dr",
         dest="dropout_regression",
         type=float,
-        default=0.0
+        default=0.0,
+        help="Dropout for regression head"
+    )
+    parser.add_argument(
+        "--tta"
+        "-t",
+        dest="tta",
+        type=int,
+        default=True,
+        help="Use test-time-augmentation?"
     )
     return parser.parse_args()
 
 
 def train_net(
-    net: Union[nn.DataParallel, smp.Unet],
+    net: Union[nn.DataParallel, smp.Unet, TransUnet],
     device: torch.device,
     experiment_id: str,
     alpha_count: float = 0.5,
@@ -257,7 +269,8 @@ def train_net(
             patience=patience,
             amp=amp,
             model_architecture=args.model_architecture,
-            dropout_regression=args.dropout_regression
+            dropout_regression=args.dropout_regression,
+            test_time_augmentation=args.tta
         )
     )
 
@@ -280,6 +293,7 @@ def train_net(
         Negative to positive ratio:  {neg_to_pos_ratio}
         Augmentation mode: {augmentation_mode}
         Mixed Precision: {amp}
+        Test-time-augmentation: {args.tta}
     """
     )
 
@@ -444,33 +458,8 @@ if __name__ == "__main__":
         "TransUnet",
     ], f"Invalid model architecture: {args.model_architecture}."
 
-    # Define parameters for classification head
-    aux_params = {"pooling": "avg", "classes": 1, "dropout": args.dropout_regression}
-
-    if args.model_architecture == "UnetEfficientNet-b0":
-        net = smp.Unet(
-            encoder_name="efficientnet-b0", in_channels=1, aux_params=aux_params
-        )
-    elif args.model_architecture == "UnetEfficientNet-b1":
-        net = smp.Unet(
-            encoder_name="efficientnet-b1", in_channels=1, aux_params=aux_params
-        )
-    elif args.model_architecture == "UnetEfficientNet-b2":
-        net = smp.Unet(
-            encoder_name="efficientnet-b2", in_channels=1, aux_params=aux_params
-        )
-    elif args.model_architecture == "UnetEfficientNet-b3":
-        net = smp.Unet(
-            encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
-        )
-    elif args.model_architecture == "TransUnet":
-        net = TransUnet(in_channels=1, classes=1, img_dim=args.patch_size,
+    net = model_factory(model_architecture=args.model_architecture, patch_size=args.patch_size,
                         dropout_regression=args.dropout_regression)
-    else:
-        net = smp.Unet(
-            encoder_name="resnet34", in_channels=1, aux_params=aux_params
-        )
-
     net.to(device=device)
 
     if args.data_parallel:
@@ -505,6 +494,7 @@ if __name__ == "__main__":
 
     # Start test loop
     logging.info("Started testing")
+
     try:
         test_unet(
             device=device,
@@ -518,6 +508,7 @@ if __name__ == "__main__":
             match_distance=1.5,
             nms_distance=1.0,
             ground_truth_gdf=args.test_gdf,
+            test_time_augmentation=args.tta
         )
         logging.info("Testing complete saving model checkpoint")
 

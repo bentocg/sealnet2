@@ -1,9 +1,7 @@
 import os
-import shutil
 from typing import Union
 
 import affine
-import cv2
 import numpy as np
 import pandas as pd
 import torch
@@ -13,6 +11,7 @@ from shapely.geometry import Point
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segmentation_models_pytorch import Unet
+import ttach as tta
 import geopandas as gpd
 
 from utils.data_processing import TestDataset
@@ -117,6 +116,7 @@ def test_unet(
     threshold: float = 0.5,
     nms_distance: float = 1.0,
     match_distance: float = 1.5,
+    test_time_augmentation: bool = True,
     amp: bool = False,
 ) -> None:
     """
@@ -131,8 +131,15 @@ def test_unet(
     :param num_workers: number of workers for dataloader
     :param batch_size: batch size for dataloader
     :param threshold: threshold for binarizing output masks (applied after sigmoid transform)
+    :param test_time_augmentation: Use test-time-augmentation?
     :param amp: use auto-mixed precision?
     """
+
+    # Apply tta
+    if test_time_augmentation:
+        net = tta.SegmentationTTAWrapper(
+            net, tta.aliases.d4_transform(), merge_mode="tsharpen", output_mask_key=0
+        )
 
     # Resume experiment
     experiment = wandb.init(
@@ -171,7 +178,10 @@ def test_unet(
         images = images.to(device)
         with torch.cuda.amp.autocast(enabled=amp):
             with torch.no_grad():
-                outputs, _ = net(images)
+                if test_time_augmentation:
+                    outputs = net(images)
+                else:
+                    outputs, _ = net(images)
 
                 # Threshold output
                 outputs = (
