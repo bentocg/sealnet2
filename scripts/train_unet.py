@@ -497,7 +497,8 @@ if __name__ == "__main__":
     logging.info("Started testing")
     if args.tta:
         cp = net.state_dict()
-        net = model_factory(model_architecture=args.model_architecture, dropout_regression=0.0, tta=True)
+        net = model_factory(model_architecture=args.model_architecture, dropout_regression=0.0,
+                            patch_size=args.patch_size, tta=True)
         net.to(device)
         net.load_state_dict(cp, strict=False)
         del cp
