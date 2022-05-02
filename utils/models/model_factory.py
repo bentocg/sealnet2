@@ -5,7 +5,7 @@ from .transunet import TransUnet
 
 
 def model_factory(
-    model_architecture: str, dropout_regression: float, patch_size: int
+    model_architecture: str, dropout_regression: float, patch_size: int, tta: bool = False
 ) -> Union[smp.Unet, TransUnet]:
     """
     Model factory.
@@ -13,10 +13,13 @@ def model_factory(
     :param model_architecture: string with model architecture
     :param dropout_regression: dropout for regression head [0, 1)
     :param patch_size: patch size
+    :param tta: omit regression head for test-time-augmentation?
     :return: pytorch model object
     """
     # Define parameters for classification head
     aux_params = {"pooling": "avg", "classes": 1, "dropout": dropout_regression}
+    if tta:
+        aux_params = None
 
     if model_architecture == "UnetEfficientNet-b0":
         net = smp.Unet(
@@ -35,6 +38,8 @@ def model_factory(
             encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
         )
     elif model_architecture == "TransUnet":
+        if tta:
+            raise Exception("Tta currently not supported for TransUnet")
         net = TransUnet(
             in_channels=1,
             classes=1,

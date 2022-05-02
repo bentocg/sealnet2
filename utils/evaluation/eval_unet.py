@@ -11,8 +11,8 @@ from shapely.geometry import Point
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segmentation_models_pytorch import Unet
-import ttach as tta
 import geopandas as gpd
+import ttach as tta
 
 from utils.data_processing import TestDataset
 from utils.evaluation.extract_centroids import extract_centroids
@@ -135,12 +135,6 @@ def test_unet(
     :param amp: use auto-mixed precision?
     """
 
-    # Apply tta
-    if test_time_augmentation:
-        net = tta.SegmentationTTAWrapper(
-            net, tta.aliases.d4_transform(), merge_mode="tsharpen", output_mask_key=0
-        )
-
     # Resume experiment
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
@@ -163,6 +157,12 @@ def test_unet(
     # Put model in eval mode
     net.eval()
 
+    # Apply tta
+    if test_time_augmentation:
+        net = tta.SegmentationTTAWrapper(
+            net, tta.aliases.d4_transform(), merge_mode="gmean"
+        )
+
     # Read scene stats csv
     scene_stats = pd.read_csv(f"{test_dir}/scene_stats.csv")
 
@@ -178,6 +178,7 @@ def test_unet(
         images = images.to(device)
         with torch.cuda.amp.autocast(enabled=amp):
             with torch.no_grad():
+
                 if test_time_augmentation:
                     outputs = net(images)
                 else:

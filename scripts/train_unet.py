@@ -163,7 +163,8 @@ def get_args():
         help="Dropout for regression head",
     )
     parser.add_argument(
-        "--tta" "-t",
+        "--tta",
+        "-t",
         dest="tta",
         type=int,
         default=1.0,
@@ -494,6 +495,14 @@ if __name__ == "__main__":
 
     # Start test loop
     logging.info("Started testing")
+    if args.tta:
+        cp = net.state_dict()
+        net = model_factory(model_architecture=args.model_architecture, dropout_regression=0.0, tta=True)
+        net.to(device)
+        net.load_state_dict(cp, strict=False)
+        del cp
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     try:
         test_unet(
