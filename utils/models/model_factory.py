@@ -1,7 +1,7 @@
 from typing import Union
 
 import segmentation_models_pytorch as smp
-from transunet import TransUnet
+from .transunet import TransUnet
 
 
 def model_factory(
