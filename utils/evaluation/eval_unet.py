@@ -200,8 +200,8 @@ def test_unet(
                         left, down = corners[idx]
                         for centroid in centroids[idx]:
                             x, y = centroid
-                            x, y = x + int(left), y + int(down)
-                            pred_points.append(Point(*((y, x) * transform_scene)))
+                            x, y = x + int(down), y + int(left)
+                            pred_points.append(Point(*((x, y) * transform_scene)))
                             x, y = int(round(x)), int(
                                 round(y)
                             )  # Convert to integer for indexing
