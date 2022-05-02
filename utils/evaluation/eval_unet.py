@@ -234,7 +234,6 @@ def test_unet(
         },
         crs=from_epsg(3031),
     )
-    preds_gdf.to_file("preds_shape.shp")
 
     # Read groundtruth gdf
     gt_gdf = gpd.read_file(ground_truth_gdf)
@@ -288,7 +287,7 @@ def test_unet(
     # Store predictions
     os.makedirs("predicted_shapefiles", exist_ok=True)
     preds_gdf = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
-    preds_gdf.to_file(f"{experiment_id}.shp")
+    preds_gdf.to_file(f"predicted_shapefiles/{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
     precision = tp / (tp + fp + eps)
