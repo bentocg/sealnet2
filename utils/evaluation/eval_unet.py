@@ -160,7 +160,7 @@ def test_unet(
     # Apply tta
     if test_time_augmentation:
         net = tta.SegmentationTTAWrapper(
-            net, tta.aliases.d4_transform(), merge_mode="gmean"
+            net, tta.aliases.d4_transform(), merge_mode="mean"
         )
 
     # Read scene stats csv
