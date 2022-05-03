@@ -411,7 +411,7 @@ def train_net(
 
                         else:
                             non_improving += 1
-                            if non_improving > 4 * val_rounds_per_epoch:
+                            if non_improving > 3 * val_rounds_per_epoch:
                                 return None
 
         if save_checkpoint:
