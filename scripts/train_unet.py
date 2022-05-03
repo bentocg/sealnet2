@@ -167,7 +167,7 @@ def get_args():
         "-t",
         dest="tta",
         type=int,
-        default=1.0,
+        default=0.0,
         help="Use test-time-augmentation?",
     )
     return parser.parse_args()
