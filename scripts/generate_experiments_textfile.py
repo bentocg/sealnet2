@@ -37,6 +37,7 @@ def main(n_experiments: int = 3000):
             ]
         )
         dropout_regression = str(np.random.uniform(0, 0.35))
+        tta = str(np.random.randint(0, 2))
         experiments.append(
             " ".join(
                 [
@@ -49,6 +50,7 @@ def main(n_experiments: int = 3000):
                     patience,
                     model_architecture,
                     dropout_regression,
+                    tta
                 ]
             )
             + "\n"
