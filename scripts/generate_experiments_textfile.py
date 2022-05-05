@@ -14,30 +14,27 @@ def main(n_experiments: int = 3000):
     for _ in range(n_experiments):
 
         uniform_weights = str(np.random.randint(0, 2))
-        count_alpha = str(np.random.uniform(0, 0.9))
-        neg_to_pos_ratio = str(np.random.uniform(0, 1.0))
+        count_alpha = str(np.random.uniform(0, 0.5))
+        neg_to_pos_ratio = str(np.random.uniform(0.5, 1.2))
         aug = np.random.choice(["simple", "complex"])
-        patience = str(np.random.randint(2, 6))
+        patience = str(np.random.randint(4, 7))
         loss_mask = np.random.choice(
             [
                 "Dice",
                 "SoftDice",
-                "Focal",
                 "Mixed",
             ]
         )
-        learning_rate = str(loguniform.rvs(1e-5, 1e-2))
+        learning_rate = str(loguniform.rvs(1e-4, 2e-3))
         model_architecture = np.random.choice(
             [
-                "UnetEfficientNet-b3",
                 "UnetEfficientNet-b2",
                 "UnetEfficientNet-b1",
                 "UnetEfficientNet-b0",
-                "UnetResnet34",
             ]
         )
         dropout_regression = str(np.random.uniform(0, 0.35))
-        tta = str(np.random.randint(0, 2))
+        tta = 1.0
         experiments.append(
             " ".join(
                 [
