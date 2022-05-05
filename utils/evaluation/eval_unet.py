@@ -270,16 +270,18 @@ def test_unet(
 
         # Add for every cutoff
         for cutoff in cutoffs:
-            tp[cutoff] += scene_tp[cutoff]
-            fp[cutoff] += scene_fp[cutoff]
-            fn[cutoff] += scene_fn[cutoff]
+            tp[str(cutoff)] += scene_tp[str(cutoff)]
+            fp[str(cutoff)] += scene_fp[str(cutoff)]
+            fn[str(cutoff)] += scene_fn[str(cutoff)]
 
             # Calculate scene statistics and store to wandb
             if cutoff == -50.0:
-                precision = scene_tp[cutoff] / (
-                    scene_tp[cutoff] + scene_fp[cutoff] + eps
+                precision = scene_tp[str(cutoff)] / (
+                    scene_tp[str(cutoff)] + scene_fp[str(cutoff)] + eps
                 )
-                recall = scene_tp[cutoff] / (scene_tp[cutoff] + scene_fn[cutoff] + eps)
+                recall = scene_tp[str(cutoff)] / (
+                    scene_tp[str(cutoff)] + scene_fn[str(cutoff)] + eps
+                )
                 f1 = 2 * (precision * recall / (precision + recall + eps))
                 experiment.log(
                     {
@@ -296,8 +298,8 @@ def test_unet(
 
     # Calculate global test statistics and store to wandb
     for cutoff in cutoffs:
-        precision = tp[cutoff] / (tp[cutoff] + fp[cutoff] + eps[cutoff])
-        recall = tp[cutoff] / (tp[cutoff] + fn[cutoff] + eps)
+        precision = tp[str(cutoff)] / (tp[str(cutoff)] + fp[str(cutoff)] + eps)
+        recall = tp[str(cutoff)] / (tp[str(cutoff)] + fn[str(cutoff)] + eps)
         f1 = 2 * (precision * recall / (precision + recall + eps))
         experiment.log(
             {
