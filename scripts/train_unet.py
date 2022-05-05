@@ -195,7 +195,7 @@ def train_net(
     uniform_group_weights: bool = False,
     save_checkpoint: bool = True,
     amp: bool = False,
-) -> None:
+) -> float:
     """
     Training loop for SealNet2.0, supports several options for hyperparameter tuning. Stores
     training statistics in wandb project.
@@ -220,6 +220,7 @@ def train_net(
     :param save_checkpoint: save model checkpoints?
     :param amp: use auto mixed-precision? (make sure your GPU supports amp)
 
+    :returns best validation f-1 score
     """
 
     # Create data loaders
@@ -414,7 +415,7 @@ def train_net(
                         else:
                             non_improving += 1
                             if non_improving > 3 * val_rounds_per_epoch:
-                                return None
+                                return best_f1
 
         if save_checkpoint:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
@@ -473,8 +474,9 @@ if __name__ == "__main__":
     seed_all(0)
 
     # Start training loop
+    best_f1 = 0
     try:
-        train_net(
+        best_f1 = train_net(
             net=net,
             epochs=args.epochs,
             alpha_count=args.alpha_count,
@@ -496,6 +498,10 @@ if __name__ == "__main__":
         logging.info("Training interrupted, continuing to testing")
 
     # Start test loop
+    if best_f1 < 0.7:
+        logging.info("Best validation f-1 score too low, skipping testing")
+        exit()
+
     logging.info("Started testing")
 
     try:
