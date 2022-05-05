@@ -268,7 +268,7 @@ def train_net(
             amp=amp,
             model_architecture=args.model_architecture,
             dropout_regression=args.dropout_regression,
-            test_time_augmentation=args.tta,
+            test_time_augmentation=args.tta
         )
     )
 
@@ -506,20 +506,21 @@ if __name__ == "__main__":
             torch.cuda.empty_cache()
 
     try:
-        test_unet(
-            device=device,
-            net=net,
-            test_dir="../training_set/test",
-            experiment_id=experiment_id,
-            batch_size=args.batch_size * 2,
-            num_workers=args.num_workers,
-            amp=args.amp,
-            threshold=0.5,
-            match_distance=1.5,
-            nms_distance=1.0,
-            ground_truth_gdf=args.test_gdf,
-            test_time_augmentation=args.tta,
-        )
+        for test_time_aug in [False, True]:
+            test_unet(
+                device=device,
+                net=net,
+                test_dir="../training_set/test",
+                experiment_id=experiment_id,
+                batch_size=args.batch_size * 2,
+                num_workers=args.num_workers,
+                amp=args.amp,
+                threshold=0.5,
+                match_distance=1.5,
+                nms_distance=1.0,
+                ground_truth_gdf=args.test_gdf,
+                test_time_augmentation=test_time_aug,
+            )
         logging.info("Testing complete saving model checkpoint")
 
         # Save model checkpoint

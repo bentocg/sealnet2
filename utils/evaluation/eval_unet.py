@@ -139,6 +139,8 @@ def test_unet(
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
     )
+    experiment.config.update({"test_time_augmentation": test_time_augmentation},
+                             allow_val_change=True)
 
     # Create Dataloader for test scenes
     test_loader = DataLoader(
