@@ -39,8 +39,8 @@ def main(n_experiments: int = 3000):
             " ".join(
                 [
                     uniform_weights,
-                    count_alpha,
                     neg_to_pos_ratio,
+                    count_alpha,
                     aug,
                     loss_mask,
                     learning_rate,
