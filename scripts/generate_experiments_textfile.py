@@ -34,7 +34,7 @@ def main(n_experiments: int = 3000):
             ]
         )
         dropout_regression = str(np.random.uniform(0, 0.35))
-        tta = "1.0"
+        tta = "1"
         experiments.append(
             " ".join(
                 [
