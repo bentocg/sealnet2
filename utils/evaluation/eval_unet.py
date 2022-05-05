@@ -1,5 +1,6 @@
 import os
-from typing import Union
+from collections import defaultdict
+from typing import Union, Tuple
 
 import affine
 import numpy as np
@@ -12,7 +13,6 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segmentation_models_pytorch import Unet
 import geopandas as gpd
-import ttach as tta
 
 from utils.data_processing import TestDataset
 from utils.evaluation.extract_centroids import extract_centroids
@@ -116,7 +116,7 @@ def test_unet(
     threshold: float = 0.5,
     nms_distance: float = 1.0,
     match_distance: float = 1.5,
-    test_time_augmentation: bool = True,
+    cutoffs: Tuple[float] = (-50.0, 0.0, 0.25, 0.5, 0.75, 1.0),
     amp: bool = False,
 ) -> None:
     """
@@ -130,8 +130,10 @@ def test_unet(
     :param experiment_id: experiment id for saving statistics
     :param num_workers: number of workers for dataloader
     :param batch_size: batch size for dataloader
+    :param ground_truth_gdf: path to shapefile with groundtruth points
     :param threshold: threshold for binarizing output masks (applied after sigmoid transform)
-    :param test_time_augmentation: Use test-time-augmentation?
+    :param nms_distance: distance for non-maximum supression removal of redundant poitnts
+    :param cutoffs: cutoffs for using regression predictions to remove false positives
     :param amp: use auto-mixed precision?
     """
 
@@ -139,8 +141,6 @@ def test_unet(
     experiment = wandb.init(
         project="SealNet2.0", resume="allow", anonymous="must", id=experiment_id
     )
-    experiment.config.update({"test_time_augmentation": test_time_augmentation},
-                             allow_val_change=True)
 
     # Create Dataloader for test scenes
     test_loader = DataLoader(
@@ -150,20 +150,14 @@ def test_unet(
         shuffle=False,
     )
 
-    # Store Statistics
-    tp = 0
-    fp = 0
-    fn = 0
-    eps = 1e-8
+    # Store statistics using regression to filter out false-positives
+    tp = defaultdict(int)
+    fp = defaultdict(int)
+    fn = defaultdict(int)
+    eps = 1e-7  # To prevent division by zero when calculating precision / recall / f-1
 
     # Put model in eval mode
     net.eval()
-
-    # Apply tta
-    if test_time_augmentation:
-        net = tta.SegmentationTTAWrapper(
-            net, tta.aliases.d4_transform(), merge_mode="mean"
-        )
 
     # Read scene stats csv
     scene_stats = pd.read_csv(f"{test_dir}/scene_stats.csv")
@@ -172,6 +166,7 @@ def test_unet(
     pred_points_support = []
     pred_points = []
     pred_point_scenes = []
+    pred_counts = []
 
     # Loop through dataloader
 
@@ -181,10 +176,7 @@ def test_unet(
         with torch.cuda.amp.autocast(enabled=amp):
             with torch.no_grad():
 
-                if test_time_augmentation:
-                    outputs = net(images)
-                else:
-                    outputs, _ = net(images)
+                outputs, counts = net(images)
 
                 # Threshold output
                 outputs = (
@@ -215,6 +207,7 @@ def test_unet(
                             x, y = centroid
                             x, y = x + int(down), y + int(left)
                             pred_points.append(Point(*((x, y) * transform_scene)))
+                            pred_counts.append(counts[idx])
                             x, y = int(round(x)), int(
                                 round(y)
                             )  # Convert to integer for indexing
@@ -233,6 +226,7 @@ def test_unet(
             "geometry": pred_points,
             "scene": pred_point_scenes,
             "support": pred_points_support,
+            "pred_counts": pred_points,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),
@@ -267,25 +261,33 @@ def test_unet(
 
         # Compare with groundtruth
         scene_tp, scene_fp, scene_fn = match_points(
-            gt_points_scene.geometry.values,
-            points_scene.geometry.values,
+            true_points=gt_points_scene.geometry.values,
+            pred_points=points_scene.geometry.values,
+            pred_counts=points_scene.pred_counts.values,
             match_distance=match_distance,
+            cutoffs=cutoffs,
         )
-        tp += scene_tp
-        fp += scene_fp
-        fn += scene_fn
 
-        # Calculate scene statistics and store to wandb
-        precision = scene_tp / (scene_tp + scene_fp + eps)
-        recall = scene_tp / (scene_tp + scene_fn + eps)
-        f1 = 2 * (precision * recall / (precision + recall + eps))
-        experiment.log(
-            {
-                f"test instance f1 {scene}": f1,
-                f"test instance precision {scene}": precision,
-                f"test instance recall {scene}": recall,
-            }
-        )
+        # Add for every cutoff
+        for cutoff in cutoffs:
+            tp[cutoff] += scene_tp[cutoff]
+            fp[cutoff] += scene_fp[cutoff]
+            fn[cutoff] += scene_fn[cutoff]
+
+            # Calculate scene statistics and store to wandb
+            if cutoff == -50.0:
+                precision = scene_tp[cutoff] / (
+                    scene_tp[cutoff] + scene_fp[cutoff] + eps
+                )
+                recall = scene_tp[cutoff] / (scene_tp[cutoff] + scene_fn[cutoff] + eps)
+                f1 = 2 * (precision * recall / (precision + recall + eps))
+                experiment.log(
+                    {
+                        f"test instance f1 {scene}": f1,
+                        f"test instance precision {scene}": precision,
+                        f"test instance recall {scene}": recall,
+                    }
+                )
 
     # Store predictions
     os.makedirs("predicted_shapefiles", exist_ok=True)
@@ -293,13 +295,14 @@ def test_unet(
     preds_gdf.to_file(f"predicted_shapefiles/{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
-    precision = tp / (tp + fp + eps)
-    recall = tp / (tp + fn + eps)
-    f1 = 2 * (precision * recall / (precision + recall + eps))
-    experiment.log(
-        {
-            "test instance f1": f1,
-            "test instance precision": precision,
-            "test instance recall": recall,
-        }
-    )
+    for cutoff in cutoffs:
+        precision = tp[cutoff] / (tp[cutoff] + fp[cutoff] + eps[cutoff])
+        recall = tp[cutoff] / (tp[cutoff] + fn[cutoff] + eps)
+        f1 = 2 * (precision * recall / (precision + recall + eps))
+        experiment.log(
+            {
+                f"test instance f1{' ' + (str(cutoff) if cutoff != -50.0 else '')}": f1,
+                f"test instance precision{' ' + (str(cutoff) if cutoff != -50.0 else '')}": precision,
+                f"test instance recall{' ' + (str(cutoff) if cutoff != -50.0 else '')}": recall,
+            }
+        )

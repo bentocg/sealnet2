@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union, Optional, Tuple, Dict
 
 from shapely.geometry import Polygon, Point
 import cv2
@@ -59,29 +59,38 @@ def match_polygons(
 
 
 def match_points(
-    true_points: List[Point], pred_points: List[Point], match_distance: float
-) -> (float, float, float):
+    true_points: List[Point], pred_points: List[Point], pred_counts: List[float],
+        match_distance: float, cutoffs: Tuple[float]
+) -> Tuple[Dict[float], Dict[float], Dict[float]]:
     """
     Matches GT and pred points to get instance level f1-score
 
+    :param cutoffs: list with cutoffs for using
     :param true_points: list with GT points
     :param pred_points: list with predicted points
+    :param pred_counts: list with predicted counts for each points' patch
     :param match_distance: distance at which two points are considered a match
 
     :return: true positives, false positives and false negatives, respectively
     """
     # Match true polygons
-    matched = set([])
+    matched = dict([])
     for idx_true, true_point in enumerate(true_points):
         for idx_pred, pred_point in enumerate(pred_points):
             if idx_pred in matched:
                 continue
             if true_point.distance(pred_point) <= match_distance:
-                matched.add(idx_pred)
+                matched[idx_pred] = cutoffs[idx_pred]
                 break
 
-    tp = len(matched)
-    fp = len(pred_points) - len(matched)
-    fn = len(true_points) - len(matched)
+    tp = {}
+    fp = {}
+    fn = {}
+    for cutoff in cutoffs:
+        pred_points_cutoff = [ele for idx, ele in pred_points if pred_counts[idx] > cutoff]
+        matched_cutoff = [key for key, val in matched.items() if val > cutoff]
+        tp[cutoff] = len(matched_cutoff)
+        fp[cutoff] = len(pred_points_cutoff) - len(matched_cutoff)
+        fn[cutoff] = len(true_points) - len(matched_cutoff)
 
     return tp, fp, fn

@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 import torchvision
+import ttach.aliases
 import wandb
 from torch import optim
 from tqdm import tqdm
@@ -18,6 +19,7 @@ sys.path.insert(0, "../")
 
 from utils.models.model_factory import model_factory
 from utils.models.transunet import TransUnet
+from utils.models.tta_wrapper import SegmentationRegTTAWrapper
 from utils.training.utility import seed_all
 from utils.data_processing import provider, inv_normalize
 from utils.loss_functions import SoftDiceLoss, FocalLoss, DiceLoss, MixedLoss
@@ -495,32 +497,23 @@ if __name__ == "__main__":
 
     # Start test loop
     logging.info("Started testing")
-    if args.tta:
-        cp = net.state_dict()
-        net = model_factory(model_architecture=args.model_architecture, dropout_regression=0.0,
-                            patch_size=args.patch_size, tta=True)
-        net.to(device)
-        net.load_state_dict(cp, strict=False)
-        del cp
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     try:
-        for test_time_aug in [False, True]:
-            test_unet(
-                device=device,
-                net=net,
-                test_dir="../training_set/test",
-                experiment_id=experiment_id,
-                batch_size=args.batch_size * 2,
-                num_workers=args.num_workers,
-                amp=args.amp,
-                threshold=0.5,
-                match_distance=1.5,
-                nms_distance=1.0,
-                ground_truth_gdf=args.test_gdf,
-                test_time_augmentation=test_time_aug,
-            )
+        if args.tta:
+            net = SegmentationRegTTAWrapper(model=net, transforms=ttach.aliases.d4_transform())
+        test_unet(
+            device=device,
+            net=net,
+            test_dir="../training_set/test",
+            experiment_id=experiment_id,
+            batch_size=args.batch_size * 2,
+            num_workers=args.num_workers,
+            amp=args.amp,
+            threshold=0.5,
+            match_distance=1.5,
+            nms_distance=1.0,
+            ground_truth_gdf=args.test_gdf,
+        )
         logging.info("Testing complete saving model checkpoint")
 
         # Save model checkpoint
