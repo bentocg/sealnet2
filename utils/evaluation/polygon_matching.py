@@ -61,7 +61,7 @@ def match_polygons(
 def match_points(
     true_points: List[Point], pred_points: List[Point], pred_counts: List[float],
         match_distance: float, cutoffs: Tuple[float]
-) -> Tuple[Dict[str, int], Dict[str, int], Dict[str, int]]:
+) -> Tuple[Dict[float, int], Dict[float, int], Dict[float, int]]:
     """
     Matches GT and pred points to get instance level f1-score
 
@@ -89,8 +89,8 @@ def match_points(
     for cutoff in cutoffs:
         pred_points_cutoff = [ele for idx, ele in pred_points if pred_counts[idx] > cutoff]
         matched_cutoff = [key for key, val in matched.items() if val > cutoff]
-        tp[str(cutoff)] = len(matched_cutoff)
-        fp[str(cutoff)] = len(pred_points_cutoff) - len(matched_cutoff)
-        fn[str(cutoff)] = len(true_points) - len(matched_cutoff)
+        tp[cutoff] = len(matched_cutoff)
+        fp[cutoff] = len(pred_points_cutoff) - len(matched_cutoff)
+        fn[cutoff] = len(true_points) - len(matched_cutoff)
 
     return tp, fp, fn

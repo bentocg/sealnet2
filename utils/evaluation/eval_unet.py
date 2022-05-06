@@ -270,17 +270,17 @@ def test_unet(
 
         # Add for every cutoff
         for cutoff in cutoffs:
-            tp[str(cutoff)] += scene_tp[str(cutoff)]
-            fp[str(cutoff)] += scene_fp[str(cutoff)]
-            fn[str(cutoff)] += scene_fn[str(cutoff)]
+            tp[cutoff] += scene_tp[cutoff]
+            fp[cutoff] += scene_fp[cutoff]
+            fn[cutoff] += scene_fn[cutoff]
 
             # Calculate scene statistics and store to wandb
             if cutoff == -50.0:
-                precision = scene_tp[str(cutoff)] / (
-                    scene_tp[str(cutoff)] + scene_fp[str(cutoff)] + eps
+                precision = scene_tp[cutoff] / (
+                    scene_tp[cutoff] + scene_fp[cutoff] + eps
                 )
-                recall = scene_tp[str(cutoff)] / (
-                    scene_tp[str(cutoff)] + scene_fn[str(cutoff)] + eps
+                recall = scene_tp[cutoff] / (
+                    scene_tp[cutoff] + scene_fn[cutoff] + eps
                 )
                 f1 = 2 * (precision * recall / (precision + recall + eps))
                 experiment.log(
@@ -298,13 +298,13 @@ def test_unet(
 
     # Calculate global test statistics and store to wandb
     for cutoff in cutoffs:
-        precision = tp[str(cutoff)] / (tp[str(cutoff)] + fp[str(cutoff)] + eps)
-        recall = tp[str(cutoff)] / (tp[str(cutoff)] + fn[str(cutoff)] + eps)
+        precision = tp[cutoff] / (tp[cutoff] + fp[cutoff] + eps)
+        recall = tp[cutoff] / (tp[cutoff] + fn[cutoff] + eps)
         f1 = 2 * (precision * recall / (precision + recall + eps))
         experiment.log(
             {
-                f"test instance f1{' ' + (str(cutoff) if cutoff != -50.0 else '')}": f1,
-                f"test instance precision{' ' + (str(cutoff) if cutoff != -50.0 else '')}": precision,
-                f"test instance recall{' ' + (str(cutoff) if cutoff != -50.0 else '')}": recall,
+                f"test instance f1{' ' + (cutoff if cutoff != -50.0 else '')}": f1,
+                f"test instance precision{' ' + (cutoff if cutoff != -50.0 else '')}": precision,
+                f"test instance recall{' ' + (cutoff if cutoff != -50.0 else '')}": recall,
             }
         )
