@@ -240,7 +240,8 @@ def test_unet(
     for scene in gt_gdf.scene.unique():
         gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
         if scene not in preds_gdf.scene.unique():
-            fn += len(gt_points_scene)
+            for cutoff in cutoffs:
+                fn[cutoff] += len(gt_points_scene)
             continue
         points_scene = preds_gdf.loc[preds_gdf.scene == scene]
         points_scene = points_scene.sort_values(
