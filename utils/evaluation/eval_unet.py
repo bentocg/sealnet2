@@ -226,7 +226,7 @@ def test_unet(
             "geometry": pred_points,
             "scene": pred_point_scenes,
             "support": pred_points_support,
-            "pred_counts": pred_points,
+            "pred_counts": pred_counts,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),

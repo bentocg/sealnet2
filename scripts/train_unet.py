@@ -172,6 +172,15 @@ def get_args():
         default=0.0,
         help="Use test-time-augmentation?",
     )
+    parser.add_argument(
+        "--min_val_f1_test",
+        "-mf",
+        dest="min_val_f1_test",
+        type=float,
+        default=0.7,
+        help="Runs with best validation f1-score below this value will terminate early without "
+             "a testing phase.",
+    )
     return parser.parse_args()
 
 
@@ -179,6 +188,7 @@ def train_net(
     net: Union[nn.DataParallel, smp.Unet, TransUnet],
     device: torch.device,
     experiment_id: str,
+    training_dir: str = "training_set",
     alpha_count: float = 0.5,
     epochs: int = 5,
     batch_size: int = 1,
@@ -225,8 +235,8 @@ def train_net(
 
     # Create data loaders
     train_loader = provider(
-        data_folder="../training_set",
-        annotation_ds="../training_set/annotations_df.csv",
+        data_folder=f"../{training_dir}",
+        annotation_ds=f"../{training_dir}/annotations_df.csv",
         num_workers=num_workers,
         augmentation_mode=augmentation_mode,
         uniform_group_weights=uniform_group_weights,
@@ -236,8 +246,8 @@ def train_net(
         patch_size=patch_size,
     )
     val_loader = provider(
-        data_folder="../training_set",
-        annotation_ds="../training_set/annotations_df.csv",
+        data_folder=f"../{training_dir}",
+        annotation_ds=f"../{training_dir}/annotations_df.csv",
         num_workers=num_workers,
         augmentation_mode=augmentation_mode,
         batch_size=batch_size * 2,
@@ -271,7 +281,7 @@ def train_net(
             amp=amp,
             model_architecture=args.model_architecture,
             dropout_regression=args.dropout_regression,
-            test_time_augmentation=args.tta
+            test_time_augmentation=args.tta,
         )
     )
 
@@ -480,6 +490,7 @@ if __name__ == "__main__":
             net=net,
             epochs=args.epochs,
             alpha_count=args.alpha_count,
+            training_dir=args.training_dir,
             uniform_group_weights=args.uniform_group_weights,
             augmentation_mode=args.augmentation_mode,
             patch_size=args.patch_size,
@@ -498,7 +509,7 @@ if __name__ == "__main__":
         logging.info("Training interrupted, continuing to testing")
 
     # Start test loop
-    if best_f1 < 0.7:
+    if best_f1 < args.min_val_f1_test:
         logging.info("Best validation f-1 score too low, skipping testing")
         exit()
 
@@ -506,11 +517,13 @@ if __name__ == "__main__":
 
     try:
         if args.tta:
-            net = SegmentationRegTTAWrapper(model=net, transforms=ttach.aliases.d4_transform())
+            net = SegmentationRegTTAWrapper(
+                model=net, transforms=ttach.aliases.d4_transform()
+            )
         test_unet(
             device=device,
             net=net,
-            test_dir="../training_set/test",
+            test_dir=f"../{args.training_dir}/test",
             experiment_id=experiment_id,
             batch_size=args.batch_size * 2,
             num_workers=args.num_workers,
