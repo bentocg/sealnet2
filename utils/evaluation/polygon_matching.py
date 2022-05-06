@@ -87,7 +87,7 @@ def match_points(
     fp = {}
     fn = {}
     for cutoff in cutoffs:
-        pred_points_cutoff = [ele for idx, ele in pred_points if pred_counts[idx] > cutoff]
+        pred_points_cutoff = [ele for idx, ele in enumerate(pred_points) if pred_counts[idx] > cutoff]
         matched_cutoff = [key for key, val in matched.items() if val > cutoff]
         tp[cutoff] = len(matched_cutoff)
         fp[cutoff] = len(pred_points_cutoff) - len(matched_cutoff)
