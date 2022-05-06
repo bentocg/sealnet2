@@ -80,7 +80,7 @@ def match_points(
             if idx_pred in matched:
                 continue
             if true_point.distance(pred_point) <= match_distance:
-                matched[idx_pred] = cutoffs[idx_pred]
+                matched[idx_pred] = pred_counts[idx_pred]
                 break
 
     tp = {}
