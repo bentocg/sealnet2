@@ -185,6 +185,9 @@ def test_unet(
                 )
                 outputs_bin = (outputs > threshold).astype(np.uint8)
 
+                # Convert counts to numpy
+                counts = counts.detach().float().cpu().numpy()
+
                 # Extract predicted centroids and scene names
                 centroids = [extract_centroids(pred_mask) for pred_mask in outputs_bin]
                 scenes = [
@@ -226,7 +229,7 @@ def test_unet(
             "geometry": pred_points,
             "scene": pred_point_scenes,
             "support": pred_points_support,
-            "pred_counts": pred_counts,
+            "pred_count": pred_counts,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),
@@ -264,7 +267,7 @@ def test_unet(
         scene_tp, scene_fp, scene_fn = match_points(
             true_points=gt_points_scene.geometry.values,
             pred_points=points_scene.geometry.values,
-            pred_counts=points_scene.pred_counts.values,
+            pred_counts=points_scene.pred_count.values,
             match_distance=match_distance,
             cutoffs=cutoffs,
         )
