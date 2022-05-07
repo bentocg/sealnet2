@@ -186,7 +186,7 @@ def test_unet(
                 outputs_bin = (outputs > threshold).astype(np.uint8)
 
                 # Convert counts to numpy
-                counts = counts.detach().float().cpu().numpy()
+                counts = counts.squeeze(1).detach().float().cpu().numpy()
 
                 # Extract predicted centroids and scene names
                 centroids = [extract_centroids(pred_mask) for pred_mask in outputs_bin]
@@ -298,6 +298,7 @@ def test_unet(
     # Store predictions
     os.makedirs("predicted_shapefiles", exist_ok=True)
     preds_gdf = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
+    breakpoint()
     preds_gdf.to_file(f"predicted_shapefiles/{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
