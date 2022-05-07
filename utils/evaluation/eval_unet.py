@@ -298,7 +298,6 @@ def test_unet(
     # Store predictions
     os.makedirs("predicted_shapefiles", exist_ok=True)
     preds_gdf = preds_gdf.loc[preds_gdf.ids.isin(to_keep)]
-    breakpoint()
     preds_gdf.to_file(f"predicted_shapefiles/{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
