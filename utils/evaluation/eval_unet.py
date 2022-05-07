@@ -307,8 +307,8 @@ def test_unet(
         f1 = 2 * (precision * recall / (precision + recall + eps))
         experiment.log(
             {
-                f"test instance f1{' ' + (cutoff if cutoff != -50.0 else '')}": f1,
-                f"test instance precision{' ' + (cutoff if cutoff != -50.0 else '')}": precision,
-                f"test instance recall{' ' + (cutoff if cutoff != -50.0 else '')}": recall,
+                f"test instance f1{' ' + (str(cutoff) if cutoff != -50.0 else '')}": f1,
+                f"test instance precision{' ' + (str(cutoff) if cutoff != -50.0 else '')}": precision,
+                f"test instance recall{' ' + (str(cutoff) if cutoff != -50.0 else '')}": recall,
             }
         )
