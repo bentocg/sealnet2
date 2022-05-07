@@ -203,7 +203,7 @@ def train_net(
     val_rounds_per_epoch: int = 3,
     augmentation_mode: str = "simple",
     uniform_group_weights: bool = False,
-    save_checkpoint: bool = True,
+    save_checkpoint: bool = False,
     amp: bool = False,
 ) -> float:
     """
