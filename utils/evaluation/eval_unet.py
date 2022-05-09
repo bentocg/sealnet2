@@ -208,19 +208,20 @@ def test_unet(
                         left, down = corners[idx]
                         for centroid in centroids[idx]:
                             x, y = centroid
-                            x, y = x + int(down), y + int(left)
-                            pred_points.append(Point(*((x, y) * transform_scene)))
-                            pred_counts.append(counts[idx])
-                            x, y = int(round(x)), int(
-                                round(y)
-                            )  # Convert to integer for indexing
+
+                            # Add support for point
                             pred_points_support.append(
                                 outputs[
                                     idx,
-                                    max(0, x - 1) : x + 2,
-                                    y - 1 : min(y + 2, outputs[idx].shape[-1]),
+                                    max(0, round(y) - 1): min(round(y) + 2, outputs[idx].shape[-1]),
+                                    max(0, round(x) - 1): min(round(x) + 2, outputs[idx].shape[-1]),
                                 ].sum()
                             )
+
+                            # Add scene coordinates from patch filename and project with transforms
+                            x, y = x + int(down), y + int(left)
+                            pred_points.append(Point(*((x, y) * transform_scene)))
+                            pred_counts.append(counts[idx])
                             pred_point_scenes.append(scene)
 
     # Add points to shapefile
@@ -239,13 +240,22 @@ def test_unet(
     gt_gdf = gpd.read_file(ground_truth_gdf)
 
     # Run non-maximum suppression
+    scenes_to_process = set(gt_gdf.scene.unique()).union(preds_gdf.scene.unique())
     to_keep = set([])
-    for scene in gt_gdf.scene.unique():
+    for scene in scenes_to_process:
         gt_points_scene = gt_gdf.loc[gt_gdf.scene == scene]
+
+        # Add empty geometry for scenes with no GT points
+        if len(gt_points_scene) == 0:
+            gt_points_scene["geometry"] = []
+
+        # Add false-negatives for scenes present in GT but missing in preds
         if scene not in preds_gdf.scene.unique():
             for cutoff in cutoffs:
                 fn[cutoff] += len(gt_points_scene)
             continue
+
+        # Subset predictions and run NMS
         points_scene = preds_gdf.loc[preds_gdf.scene == scene]
         points_scene = points_scene.sort_values(
             by="support", ascending=False
@@ -272,7 +282,7 @@ def test_unet(
             cutoffs=cutoffs,
         )
 
-        # Add for every cutoff
+        # Add test metrics for every cutoff
         for cutoff in cutoffs:
             tp[cutoff] += scene_tp[cutoff]
             fp[cutoff] += scene_fp[cutoff]
@@ -283,9 +293,7 @@ def test_unet(
                 precision = scene_tp[cutoff] / (
                     scene_tp[cutoff] + scene_fp[cutoff] + eps
                 )
-                recall = scene_tp[cutoff] / (
-                    scene_tp[cutoff] + scene_fn[cutoff] + eps
-                )
+                recall = scene_tp[cutoff] / (scene_tp[cutoff] + scene_fn[cutoff] + eps)
                 f1 = 2 * (precision * recall / (precision + recall + eps))
                 experiment.log(
                     {
@@ -301,6 +309,9 @@ def test_unet(
     preds_gdf.to_file(f"predicted_shapefiles/{experiment_id}.shp")
 
     # Calculate global test statistics and store to wandb
+    best_f1_test = 0
+    best_f1_test_recall = 0
+    best_f1_test_precision = 0
     for cutoff in cutoffs:
         precision = tp[cutoff] / (tp[cutoff] + fp[cutoff] + eps)
         recall = tp[cutoff] / (tp[cutoff] + fn[cutoff] + eps)
@@ -312,3 +323,16 @@ def test_unet(
                 f"test instance recall{(' ' + str(cutoff) if cutoff != -50.0 else '')}": recall,
             }
         )
+        if f1 > best_f1_test:
+            best_f1_test = f1
+            best_f1_test_precision = precision
+            best_f1_test_recall = recall
+
+    # Store best test instance f-1
+    experiment.log(
+        {
+            f"best test instance f1": best_f1_test,
+            f"best test instance f1 precision": best_f1_test_precision,
+            f"best test instance f1 recall": best_f1_test_recall,
+        }
+    )
