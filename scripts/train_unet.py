@@ -503,7 +503,7 @@ if __name__ == "__main__":
             val_rounds_per_epoch=args.val_rounds_per_epoch,
             learning_rate=args.lr,
             device=device,
-            amp=args.amp,
+            amp=bool(args.amp),
         )
     except KeyboardInterrupt:
         logging.info("Training interrupted, continuing to testing")
@@ -527,7 +527,7 @@ if __name__ == "__main__":
             experiment_id=experiment_id,
             batch_size=args.batch_size * 2,
             num_workers=args.num_workers,
-            amp=args.amp,
+            amp=bool(args.amp),
             threshold=0.5,
             match_distance=1.5,
             nms_distance=1.0,
