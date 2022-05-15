@@ -1,4 +1,6 @@
+import json
 import os
+from collections import defaultdict
 
 import cv2
 import pandas as pd
@@ -12,6 +14,17 @@ from shapely.geometry import Polygon
 
 sys.path.insert(0, "..")
 from utils.data_processing import Tiff
+
+
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
 
 
 def parse_args():
@@ -62,6 +75,15 @@ def parse_args():
         default="../training_set",
         help="Path to output dir to save centroids binary mask.",
     )
+    parser.add_argument(
+        "-b",
+        "--bbox-size",
+        dest="bbox_size",
+        type=int,
+        default=11,
+        help="Bounding box size for COCO annotations"
+    )
+
     return parser.parse_args()
 
 
@@ -82,6 +104,28 @@ def main():
 
     # Store filenames
     annotations_df = pd.DataFrame()
+
+    # Store annotations json for COCO format
+    annotations_coco = {
+        split: {
+            "images": defaultdict(dict),
+            "annotations": defaultdict(list),
+            "info": {
+                "contributor": None,
+                "date_created": "2022-5-01T16:11:15.258399+00:00",
+                "description": "sealnet_binary",
+                "url": None,
+                "version": None,
+                "year": 2022,
+            },
+            "licenses": None,
+            "categories": [{"name": "seal", "category": "seal", "id": 1}],
+        }
+        for split in annotations.dataset.unique()
+    }
+
+    annotation_id = {split: 0 for split in annotations.dataset.unique()}
+    img_id = {split: 0 for split in annotations.dataset.unique()}
 
     # Assert annotations are valid
     for col in ["scene", "label", "geometry"]:
@@ -170,7 +214,7 @@ def main():
                 cv2.imwrite(f"{args.output_dir}/{split}/y/{filename}", mask)
                 label_counters[label] += 1
 
-                # Add entry to annotation
+                # Add entry to annotation df
                 annotations_df = annotations_df.append(
                     {
                         "label": label,
@@ -181,6 +225,51 @@ def main():
                     },
                     ignore_index=True,
                 )
+
+                # Add coco format img
+                annotations_coco[split]["images"][img_id[split]] = {
+                        "file_name": filename,
+                        "height": args.patch_size,
+                        "width": args.patch_size,
+                        "id": img_id[split],
+                }
+
+                # Find all centroids in mask
+                contours, _ = cv2.findContours(
+                    cv2.dilate(mask, np.ones((3, 3))), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                for contour in contours:
+
+                    # Get bounding box for contour
+                    top = max(0, min(ele[0][0] for ele in contour) - args.bbox_size // 2)
+                    bottom = max(0, min(ele[0][1] for ele in contour) - args.bbox_size // 2)
+                    bbox = [
+                        top,
+                        bottom,
+                        min(args.bbox_size, args.patch_size - top),
+                        min(args.bbox_size, args.patch_size - bottom)
+                    ]
+
+                    # Get segmentation mask for contour
+                    contour = (
+                        contour.flatten().tolist()
+                    )  # Flatten and convert to list for json
+
+                    area = bbox[2] * bbox[3]
+                    annotations_coco[split]["annotations"][img_id[split]].append(
+                        {
+                            "image_id": img_id[split],
+                            "area": area,
+                            "bbox": bbox,
+                            "id": annotation_id[split],
+                            "category_id": 1,
+                            "iscrowd": 0,
+                            "segmentation": [contour],
+                        }
+                    )
+                    annotation_id[split] += 1
+
+                img_id[split] += 1
 
             # Add negative patches
             prev_len = len(existing_negatives)
@@ -278,6 +367,11 @@ def main():
 
     # Save annotations df
     annotations_df.to_csv(f"{args.output_dir}/annotations_df.csv", index=False)
+
+    # Save JSON dataset
+    for split in annotations_coco:
+        with open(f"{args.output_dir}/{split}/annotations_coco.json", "w") as fout:
+            json.dump(annotations_coco[split], fout, cls=NpEncoder)
 
 
 if __name__ == "__main__":
