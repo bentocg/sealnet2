@@ -54,7 +54,7 @@ def main(n_experiments: int = 3000):
         )
 
     # Write experiments to file
-    with open("experiments_to_process.txt", "w") as file:
+    with open("experiments_to_process_unet.txt", "w") as file:
         for line in experiments:
             file.write(line)
 

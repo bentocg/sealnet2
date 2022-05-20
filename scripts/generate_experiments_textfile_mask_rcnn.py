@@ -13,48 +13,31 @@ def main(n_experiments: int = 3000):
     # Sample a combinations of hyperparameters
     for _ in range(n_experiments):
 
-        uniform_weights = str(np.random.randint(0, 2))
-        count_alpha = str(np.random.uniform(0, 0.5))
-        neg_to_pos_ratio = str(np.random.uniform(0.5, 1.2))
         aug = np.random.choice(["simple", "complex"])
         patience = str(np.random.randint(4, 7))
-        loss_mask = np.random.choice(
-            [
-                "Dice",
-                "SoftDice",
-                "Mixed",
-            ]
-        )
         learning_rate = str(loguniform.rvs(1e-4, 2e-3))
         model_architecture = np.random.choice(
             [
-                "UnetEfficientNet-b2",
-                "UnetEfficientNet-b1",
-                "UnetEfficientNet-b0",
+                "maskrcnn_resnet50_fpn",
+                "fasterrcnn_resnet50_fpn",
             ]
         )
-        dropout_regression = str(np.random.uniform(0, 0.35))
-        tta = "1"
+        box_iou_thresh = np.random.uniform(0.3, 0.8)
         experiments.append(
             " ".join(
                 [
-                    uniform_weights,
-                    neg_to_pos_ratio,
-                    count_alpha,
                     aug,
-                    loss_mask,
                     learning_rate,
                     patience,
                     model_architecture,
-                    dropout_regression,
-                    tta
+                    box_iou_thresh
                 ]
             )
             + "\n"
         )
 
     # Write experiments to file
-    with open("experiments_to_process.txt", "w") as file:
+    with open("experiments_to_process_maskrcnn.txt", "w") as file:
         for line in experiments:
             file.write(line)
 
