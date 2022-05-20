@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, "../")
 
-from utils.models.model_factory import model_factory
+from utils.models.model_factory import get_semantic_segmentation_model
 from utils.models.transunet import TransUnet
 from utils.models.tta_wrapper import SegmentationRegTTAWrapper
 from utils.training.utility import seed_all
@@ -97,7 +97,11 @@ def get_args():
         help="Scale between number of negative and positive samples in train dataloader",
     )
     parser.add_argument(
-        "--patience", "-p", type=int, default=3, help="Number of non-impro"
+        "--patience",
+        "-p",
+        type=int,
+        default=3,
+        help="Number of non-improving epochs until " "learning rate is decreased",
     )
     parser.add_argument(
         "--augmentation-mode",
@@ -105,18 +109,18 @@ def get_args():
         type=str,
         dest="augmentation_mode",
         default="simple",
+        choices=["simple", "complex"],
         help="Augmentation mode",
     )
-    parser.add_argument(
-        "--amp", "-m", type=int, default=0, help="Use mixed precision"
-    )
+    parser.add_argument("--amp", "-m", type=int, default=0, help="Use mixed precision")
     parser.add_argument(
         "--criterion-mask",
         "-c",
         type=str,
         default="Dice",
+        choices=["Dice", "SoftDice", "Focal", "Mixed"],
         dest="criterion_mask",
-        help="Loss function for training U-Net masks, one of {'Dice', 'SoftDice', 'Focal', 'Mixed'}",
+        help="Loss function for training U-Net masks",
     )
     parser.add_argument(
         "--num-workers",
@@ -154,6 +158,13 @@ def get_args():
         dest="model_architecture",
         type=str,
         default="UnetResnet34",
+        choices=[
+            "UnetResnet34",
+            "UnetEfficientNet-b0",
+            "UnetEfficientNet-b1",
+            "UnetEfficientNet-b2",
+            "UnetEfficientNet-b3",
+        ],
         help="Model architecture name",
     )
     parser.add_argument(
@@ -173,13 +184,13 @@ def get_args():
         help="Use test-time-augmentation?",
     )
     parser.add_argument(
-        "--min_val_f1_test",
+        "--min-val-f1-test",
         "-mf",
         dest="min_val_f1_test",
         type=float,
         default=0.7,
         help="Runs with best validation f1-score below this value will terminate early without "
-             "a testing phase.",
+        "a testing phase.",
     )
     return parser.parse_args()
 
@@ -443,13 +454,7 @@ if __name__ == "__main__":
     logging.info(f"Using device {device}")
     experiment_id = str(uuid.uuid4())
 
-    # Make sure criterion for masks is valid
-    assert args.criterion_mask in [
-        "Dice",
-        "SoftDice",
-        "Focal",
-        "Mixed",
-    ], f"Invalid Criterion choice: {args.criterion_mask}."
+    # Set up loss function for masks
     if args.criterion_mask == "Dice":
         criterion_mask = DiceLoss()
     elif args.criterion_mask == "SoftDice":
@@ -459,23 +464,15 @@ if __name__ == "__main__":
     else:
         criterion_mask = MixedLoss()
 
-    # Make sure model architecture is supported
-    assert args.model_architecture in [
-        "UnetEfficientNet-b3",
-        "UnetEfficientNet-b2",
-        "UnetEfficientNet-b1",
-        "UnetEfficientNet-b0",
-        "UnetResnet34",
-        "TransUnet",
-    ], f"Invalid model architecture: {args.model_architecture}."
-
-    net = model_factory(
+    # Instantiate model
+    net = get_semantic_segmentation_model(
         model_architecture=args.model_architecture,
         patch_size=args.patch_size,
         dropout_regression=args.dropout_regression,
     )
     net.to(device=device)
 
+    # Use data-parallel when requested
     if args.data_parallel:
         device_ids = [int(ele) for ele in args.data_parallel.split("_")]
         net = nn.DataParallel(net, device_ids=device_ids)
