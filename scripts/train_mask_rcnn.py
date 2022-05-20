@@ -9,7 +9,7 @@ import sys
 
 import wandb
 from torch import optim
-from torchvision.models.detection import MaskRCNN
+from torchvision.models.detection import MaskRCNN, FasterRCNN
 
 from torch.utils.data import DataLoader
 
@@ -123,12 +123,20 @@ def parse_args():
         ],
         help="Model architecture",
     )
+    parser.add_argument(
+        "--box-iou-thresh",
+        "-biou",
+        dest="box_iou_thresh",
+        type=float,
+        default=0.5,
+        help="Minimum IoU for matching pred box with GT during training"
+    )
 
     return parser.parse_args()
 
 
 def train_net(
-    net: Union[MaskRCNN, nn.DataParallel],
+    net: Union[MaskRCNN, FasterRCNN, nn.DataParallel],
     device: torch.device,
     experiment_id: str,
     training_dir: str = "training_set",
@@ -329,7 +337,7 @@ if __name__ == "__main__":
 
     # Instantiate model
     net = get_instance_segmentation_model(
-        num_classes=2, model_name=args.model_architecture
+        num_classes=2, model_name=args.model_architecture, box_fg_iou_thresh=args.box_iou_thresh
     )
     net.to(device=device)
 
