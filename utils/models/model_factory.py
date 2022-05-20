@@ -163,7 +163,8 @@ def get_semantic_segmentation_model(
     return net
 
 
-def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_fpn"):
+def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_fpn",
+                                    box_fg_iou_thresh=0.5):
     # Load a pre-trained model for classification
     # and return only the features
     if model_name.startswith("efficientnet"):
@@ -175,7 +176,7 @@ def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_f
         model = MaskRCNN(
             backbone,
             num_classes,
-            box_fg_iou_thresh=0.5,
+            box_fg_iou_thresh=box_fg_iou_thresh,
             box_nms_thresh=0.2,
             rpn_nms_thresh=0.2,
             rpn_score_thresh=0.8,
@@ -185,7 +186,7 @@ def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_f
         # Load an instance segmentation model pre-trained on COCO
         model = torchvision.models.detection.__dict__[model_name](
             pretrained=True,
-            box_fg_iou_thresh=0.5,
+            box_fg_iou_thresh=box_fg_iou_thresh,
             box_nms_thresh=0.2,
             rpn_nms_thresh=0.2,
             rpn_score_thresh=0.8,
