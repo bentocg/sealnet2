@@ -1,8 +1,8 @@
 from torch import nn
 from einops import rearrange
 
-from .bottleneck_layer import Bottleneck
-from .decoder import Up, SignleConv
+from .transunet_bottleneck_layer import Bottleneck
+from .transunet_decoder import Up, SignleConv
 from .vit import ViT
 
 
