@@ -151,7 +151,7 @@ def test_maskrcnn(
                     for k, v in p.items()
                     if k == "boxes"
                 ]
-                if "masks" in outputs:
+                if "masks" in outputs[0]:
                     pred_masks = [
                         v.detach().cpu().numpy()
                         for p in outputs
@@ -194,14 +194,16 @@ def test_maskrcnn(
                         for idx2, centroid in enumerate(centroids[idx]):
                             x, y = centroid
 
-                            # Add support for point
+                            # Add support for point from bbox
                             pred_points_support_box.append(
                                 support_box[idx][idx2]
                             )
 
-                            pred_points_support_mask.append(
-                                support_mask[idx][idx2]
-                            )
+                            # Add support for point from mask, if available
+                            if "masks" in outputs[0]:
+                                pred_points_support_mask.append(
+                                    support_mask[idx][idx2]
+                                )
 
                             pred_counts.append(len(centroids[idx]))
 
