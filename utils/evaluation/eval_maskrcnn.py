@@ -58,8 +58,8 @@ def validate_maskrcnn(net, val_loader, device):
                 fp += fp_batch
                 fn += fn_batch
 
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
+    precision = tp / (tp + fp + eps)
+    recall = tp / (tp + fn + eps)
     f1 = 2 * (precision * recall / (precision + recall + eps))
 
     output = net(images)
