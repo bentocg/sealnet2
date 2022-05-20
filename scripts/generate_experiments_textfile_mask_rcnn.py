@@ -22,7 +22,7 @@ def main(n_experiments: int = 3000):
                 "fasterrcnn_resnet50_fpn",
             ]
         )
-        box_iou_thresh = np.random.uniform(0.3, 0.8)
+        box_iou_thresh = str(np.random.uniform(0.3, 0.8))
         experiments.append(
             " ".join(
                 [
