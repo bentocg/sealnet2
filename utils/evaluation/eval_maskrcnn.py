@@ -8,6 +8,7 @@ import torch
 import wandb
 from fiona.crs import from_epsg
 from shapely.geometry import Point
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.models.detection import MaskRCNN, FasterRCNN
 import geopandas as gpd
@@ -70,7 +71,7 @@ def validate_maskrcnn(net, val_loader, device):
 
 def test_maskrcnn(
     device: torch.device,
-    net: Union[MaskRCNN, FasterRCNN],
+    net: Union[MaskRCNN, FasterRCNN, nn.DataParallel],
     test_dir: str,
     experiment_id: str,
     num_workers: int,
