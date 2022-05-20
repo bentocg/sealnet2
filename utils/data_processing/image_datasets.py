@@ -4,7 +4,6 @@ import gc
 import json
 
 import pandas as pd
-from fiftyone.zoo.datasets.torch import torchvision
 from torch.utils.data import Dataset
 import numpy as np
 import torch
@@ -119,7 +118,7 @@ class TestDataset(Dataset):
         img_name = self.img_names[idx]
         img = cv2.imread(img_name, 0)
         try:
-            img = self.transforms(image=img)["image"]
+            img = self._transforms(image=img)["image"]
         except:
             print("failed")
             print(img_name)
@@ -165,9 +164,17 @@ class SealNetInstanceDataset(Dataset):
 
         img = out["image"]
         target = {
-            "mask": out["mask"],
-            "bboxes": out["bboxes"],
-            "category_ids": out["category_ids"],
+            "masks": out["mask"],
+            "boxes": torch.Tensor(
+                [
+                    [box[0], box[1], box[2] + box[0], box[3] + box[1]]
+                    for box in out["bboxes"]
+                ]
+            ),
+            "labels": torch.LongTensor(out["category_ids"]),
+            "iscrowd": 0,
+            "area": out["mask"].sum(),
+            "image_id": idx,
         }
         return img, target
 

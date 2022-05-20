@@ -32,7 +32,7 @@ def parse_args():
         "-tr",
         dest="training_dir",
         type=str,
-        default="training_set",
+        default="../training_set",
         help="Path to training set",
     )
     parser.add_argument(
