@@ -155,12 +155,16 @@ class SealNetInstanceDataset(Dataset):
         target = {"image_id": idx, "annotations": targets}
         img, target = self.prepare(img, target)
 
-        out = self._transforms(
-            image=img,
-            mask=target["masks"],
-            bboxes=target["boxes"],
-            category_ids=target["labels"],
-        )
+        while True:
+            out = self._transforms(
+                image=img,
+                mask=target["masks"],
+                bboxes=target["boxes"],
+                category_ids=target["labels"],
+            )
+
+            if len(out["bboxes"]) > 0:
+                break
 
         img = out["image"]
         target = {

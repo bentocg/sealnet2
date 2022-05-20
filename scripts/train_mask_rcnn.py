@@ -32,7 +32,7 @@ def parse_args():
         "-tr",
         dest="training_dir",
         type=str,
-        default="../training_set",
+        default="training_set",
         help="Path to training set",
     )
     parser.add_argument(
@@ -226,6 +226,7 @@ def train_net(
            Epochs:          {epochs}
            Batch size:      {batch_size}
            Learning rate:   {learning_rate}
+           Patch size:      {patch_size}
            Device:          {device.type}
            Patience:        {patience}
            Decay factor:    {decay_factor}
