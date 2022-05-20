@@ -177,6 +177,7 @@ def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_f
             backbone,
             num_classes,
             box_fg_iou_thresh=box_fg_iou_thresh,
+            box_bg_iou_thresh=box_fg_iou_thresh - 0.2,
             box_nms_thresh=0.2,
             rpn_nms_thresh=0.2,
             rpn_score_thresh=0.8,
@@ -187,6 +188,7 @@ def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_f
         model = torchvision.models.detection.__dict__[model_name](
             pretrained=True,
             box_fg_iou_thresh=box_fg_iou_thresh,
+            box_bg_iou_thresh=box_fg_iou_thresh - 0.2,
             box_nms_thresh=0.2,
             rpn_nms_thresh=0.2,
             rpn_score_thresh=0.8,
