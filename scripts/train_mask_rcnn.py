@@ -292,8 +292,18 @@ def train_net(
 
                 # Evaluation round (n rounds per epoch)
                 division_step = n_train // (batch_size * val_rounds_per_epoch)
+
                 if division_step > 0:
+
                     if global_step % division_step == 0:
+
+                        # Free up memory from training
+                        del images
+                        del targets
+                        del losses
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+
                         with torch.cuda.amp.autocast(enabled=amp):
                             (
                                 val_f1,
