@@ -219,12 +219,14 @@ def test_maskrcnn(
             "geometry": pred_points,
             "scene": pred_point_scenes,
             "support_box": pred_points_support_box,
-            "support_mask": pred_points_support_mask,
             "pred_count": pred_counts,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),
     )
+
+    if "masks" in outputs[0]:
+        preds_gdf["support_mask"] = pred_points_support_mask
 
     # Read groundtruth gdf
     gt_gdf = gpd.read_file(ground_truth_gdf)
