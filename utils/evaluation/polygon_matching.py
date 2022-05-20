@@ -5,9 +5,7 @@ import cv2
 import numpy as np
 
 
-def match_polygons(
-    true_mask: np.ndarray, pred_mask: np.ndarray
-) -> (int, int, int):
+def match_polygons(true_mask: np.ndarray, pred_mask: np.ndarray) -> (int, int, int):
     """
     Matches predicted masks with ground truth masks by converting them to shapely polygons and
     looking for intersections.
@@ -59,8 +57,11 @@ def match_polygons(
 
 
 def match_points(
-    true_points: List[Point], pred_points: List[Point], pred_counts: List[float],
-        match_distance: float, cutoffs: Tuple[float]
+    true_points: List[Point],
+    pred_points: List[Point],
+    pred_counts: List[float],
+    match_distance: float,
+    cutoffs: Tuple[float],
 ) -> Tuple[Dict[float, int], Dict[float, int], Dict[float, int]]:
     """
     Matches GT and pred points to get instance level f1-score
@@ -87,10 +88,33 @@ def match_points(
     fp = {}
     fn = {}
     for cutoff in cutoffs:
-        pred_points_cutoff = [ele for idx, ele in enumerate(pred_points) if pred_counts[idx] > cutoff]
+        pred_points_cutoff = [
+            ele for idx, ele in enumerate(pred_points) if pred_counts[idx] > cutoff
+        ]
         matched_cutoff = [key for key, val in matched.items() if val > cutoff]
         tp[cutoff] = len(matched_cutoff)
         fp[cutoff] = len(pred_points_cutoff) - len(matched_cutoff)
         fn[cutoff] = len(true_points) - len(matched_cutoff)
+
+    return tp, fp, fn
+
+
+def bbox_to_pol(xmin, ymin, xmax, ymax):
+    return Polygon([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
+
+
+def match_bbox_pols(gt_pols, pred_pols, min_iou_match: float = 0.5):
+    matched = set([])
+    for idx_true, true_pol in enumerate(gt_pols):
+        for idx_pred, pred_pol in enumerate(pred_pols):
+            if idx_pred in matched:
+                continue
+            if true_pol.intersection(pred_pol).area / true_pol.union(pred_pol).area > min_iou_match:
+                matched.add(idx_pred)
+                break
+
+    tp = len(matched)
+    fp = len(pred_pols) - tp
+    fn = len(gt_pols) - tp
 
     return tp, fp, fn
