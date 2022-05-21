@@ -249,7 +249,7 @@ def test_maskrcnn(
         # Subset predictions and run NMS
         points_scene = preds_gdf.loc[preds_gdf.scene == scene]
         points_scene = points_scene.sort_values(
-            by="support", ascending=False
+            by="support_box", ascending=False
         ).reset_index()
         while True:
             if len(points_scene) < 2:
