@@ -178,8 +178,8 @@ def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_f
             num_classes,
             box_fg_iou_thresh=box_fg_iou_thresh,
             box_bg_iou_thresh=box_fg_iou_thresh - 0.2,
-            box_nms_thresh=0.1,
-            rpn_nms_thresh=0.1,
+            box_nms_thresh=0.2,
+            rpn_nms_thresh=0.2,
             rpn_score_thresh=0.8,
         )
 
