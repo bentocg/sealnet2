@@ -1,3 +1,4 @@
+import os
 from itertools import product
 import cv2
 import numpy as np
@@ -15,6 +16,9 @@ def tile_image(
     :param out_dir: directory for saving tiles
     :param scene: scene name
     """
+
+    # Create output folder if it doesn't exist
+    os.makedirs(out_dir, exist_ok=True)
 
     # Extract raster dimensions
     _, height, width = img.shape

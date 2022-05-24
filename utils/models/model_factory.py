@@ -116,7 +116,6 @@ def get_semantic_segmentation_model(
     model_architecture: str,
     dropout_regression: float,
     patch_size: int,
-    tta: bool = False,
 ) -> Union[smp.Unet, TransUnet]:
     """
     Model factory.
@@ -129,8 +128,6 @@ def get_semantic_segmentation_model(
     """
     # Define parameters for classification head
     aux_params = {"pooling": "avg", "classes": 1, "dropout": dropout_regression}
-    if tta:
-        aux_params = None
 
     if model_architecture == "UnetEfficientNet-b0":
         net = smp.Unet(
@@ -149,8 +146,6 @@ def get_semantic_segmentation_model(
             encoder_name="efficientnet-b3", in_channels=1, aux_params=aux_params
         )
     elif model_architecture == "TransUnet":
-        if tta:
-            raise Exception("Tta currently not supported for TransUnet")
         net = TransUnet(
             in_channels=1,
             classes=1,
