@@ -354,7 +354,7 @@ if __name__ == "__main__":
 
     # Instantiate model
     net = get_instance_segmentation_model(
-        num_classes=2, model_name=args.model_architecture, box_fg_iou_thresh=args.box_iou_thresh
+        model_name=args.model_architecture, box_fg_iou_thresh=args.box_iou_thresh
     )
     net.to(device=device)
 

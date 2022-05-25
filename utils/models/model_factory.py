@@ -89,7 +89,7 @@ roi_heads.maskrcnn_loss = maskrcnn_loss
 uncache(["torchvision.models.detection.roi_heads"])
 
 from torchvision.models.detection import MaskRCNN
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FasterRCNN
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 from efficientnet_pytorch import EfficientNet
@@ -158,8 +158,17 @@ def get_semantic_segmentation_model(
     return net
 
 
-def get_instance_segmentation_model(num_classes, model_name="maskrcnn_resnet50_fpn",
-                                    box_fg_iou_thresh=0.5):
+def get_instance_segmentation_model(num_classes: int = 2, model_name: str = "maskrcnn_resnet50_fpn",
+                                    box_fg_iou_thresh: float = 0.5) -> Union[MaskRCNN, FasterRCNN]:
+    """
+    Instantiates instance segmentation / object detection models.
+
+    :param num_classes: number of bbox classes, 2 for binary classification
+    :param model_name: model architecture name
+    :param box_fg_iou_thresh: bbox foreground iou threshold
+
+    :return: pytorch model
+    """
     # Load a pre-trained model for classification
     # and return only the features
     if model_name.startswith("efficientnet"):
