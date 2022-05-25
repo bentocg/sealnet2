@@ -55,10 +55,18 @@ def parse_args():
         "--tta", "-t", type=int, default=1, help="Use test-time augmentation?"
     )
     parser.add_argument(
-        "--model-checkpoint", "-mc", dest="model_checkpoint", type=str, help="Path to model checkpoint"
+        "--model-checkpoint",
+        "-mc",
+        dest="model_checkpoint",
+        type=str,
+        help="Path to model checkpoint",
     )
     parser.add_argument(
-        "--model-architecture", "-ma", dest="model_architecture", type=str, help="Model architecture for checkpoint"
+        "--model-architecture",
+        "-ma",
+        dest="model_architecture",
+        type=str,
+        help="Model architecture for checkpoint",
     )
     parser.add_argument(
         "--out-dir",
@@ -73,7 +81,7 @@ def parse_args():
         dest="batch_size",
         type=int,
         default=20,
-        help="Batch size"
+        help="Batch size",
     )
     return parser.parse_args()
 
@@ -118,6 +126,7 @@ def predict_unet(
     pred_points_support = []
     pred_points = []
     pred_counts = []
+    pred_points_distance_from_center = []
 
     for images, image_names in test_loader:
 
@@ -129,8 +138,8 @@ def predict_unet(
 
                 # Threshold output
                 outputs = (
-                        torch.sigmoid(outputs).squeeze(1).detach().float().cpu().numpy()
-                        * 255
+                    torch.sigmoid(outputs).squeeze(1).detach().float().cpu().numpy()
+                    * 255
                 )
                 outputs_bin = (outputs > threshold_mask).astype(np.uint8)
 
@@ -151,12 +160,26 @@ def predict_unet(
                         for centroid in centroids[idx]:
                             x, y = centroid
 
+                            # Get distance from center of the tile
+                            distance_from_center = np.linalg.norm(
+                                np.array([x, y]) -
+                                np.array(
+                                    [outputs[idx].shape[-1] // 2,
+                                     outputs[idx].shape[-1] // 2],
+                                ),
+                            )
+                            pred_points_distance_from_center.append(distance_from_center)
+
                             # Add support for point
                             pred_points_support.append(
                                 outputs[
-                                idx,
-                                max(0, round(y) - 1): min(round(y) + 2, outputs[idx].shape[-1]),
-                                max(0, round(x) - 1): min(round(x) + 2, outputs[idx].shape[-1]),
+                                    idx,
+                                    max(0, round(y) - 1) : min(
+                                        round(y) + 2, outputs[idx].shape[-1]
+                                    ),
+                                    max(0, round(x) - 1) : min(
+                                        round(x) + 2, outputs[idx].shape[-1]
+                                    ),
                                 ].sum()
                             )
 
@@ -171,6 +194,7 @@ def predict_unet(
             "geometry": pred_points,
             "support": pred_points_support,
             "pred_count": pred_counts,
+            "distance_from_center": pred_points_distance_from_center,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),
@@ -179,9 +203,7 @@ def predict_unet(
     # Apply NMS
     to_keep = set([])
     points_scene = preds_gdf.copy()
-    points_scene = points_scene.sort_values(
-        by="support", ascending=False
-    ).reset_index()
+    points_scene = points_scene.sort_values(by="support", ascending=False).reset_index()
 
     # Remove overlapping points with less support
     while True:
@@ -190,9 +212,7 @@ def predict_unet(
         curr = points_scene.iloc[0]["geometry"]
         to_keep.add(points_scene.iloc[0]["ids"])
         curr_pol = curr.buffer(nms_distance)
-        points_scene = points_scene.loc[
-            ~(points_scene.geometry.intersects(curr_pol))
-        ]
+        points_scene = points_scene.loc[~(points_scene.geometry.intersects(curr_pol))]
 
     preds_gdf = preds_gdf.loc[(preds_gdf.ids.isin(to_keep))]
     return preds_gdf
@@ -210,15 +230,24 @@ if __name__ == "__main__":
     temp_dir = f"temp_output_{scene}"
     with rasterio.open(args.input_raster) as src:
         transforms = src.transform
-        tile_image(img=src.read([1]), patch_size=args.patch_size, stride=args.stride,
-                   out_dir=temp_dir, scene=scene)
+        tile_image(
+            img=src.read([1]),
+            patch_size=args.patch_size,
+            stride=args.stride,
+            out_dir=temp_dir,
+            scene=scene,
+        )
 
     # Instantiate model and load checkpoint
-    net = get_semantic_segmentation_model(model_architecture=args.model_architecture,
-                                          dropout_regression=0.0,
-                                          patch_size=args.patch_size)
+    net = get_semantic_segmentation_model(
+        model_architecture=args.model_architecture,
+        dropout_regression=0.0,
+        patch_size=args.patch_size,
+    )
     state_dict = torch.load(args.model_checkpoint, map_location=torch.device("cpu"))
-    state_dict = OrderedDict({key.replace("model.", ""): val for key, val in state_dict.items()})
+    state_dict = OrderedDict(
+        {key.replace("model.", ""): val for key, val in state_dict.items()}
+    )
     net.load_state_dict(state_dict)
     net.to(device=device)
     net.eval()
@@ -230,11 +259,14 @@ if __name__ == "__main__":
         )
 
     # Predict on tiles
-    preds_gdf = predict_unet(device=device, net=net,
-                             input_dir=temp_dir,
-                             num_workers=1,
-                             transforms=transforms,
-                             batch_size=args.batch_size)
+    preds_gdf = predict_unet(
+        device=device,
+        net=net,
+        input_dir=temp_dir,
+        num_workers=1,
+        transforms=transforms,
+        batch_size=args.batch_size,
+    )
     preds_gdf["scene"] = scene
 
     # Remove temporary files
