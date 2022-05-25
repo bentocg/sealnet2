@@ -2,6 +2,7 @@ import os
 from typing import Union
 
 import affine
+import numpy as np
 import pandas as pd
 import torch
 
@@ -19,7 +20,21 @@ from utils.evaluation.polygon_matching import bbox_to_pol, match_bbox_pols, matc
 from utils.evaluation.visualize_maskrcnn_boxes import create_vizualization_grid
 
 
-def validate_maskrcnn(net, val_loader, device):
+def validate_maskrcnn(
+    net: Union[MaskRCNN, FasterRCNN, nn.DataParallel],
+    val_loader: DataLoader,
+    device: torch.device,
+) -> (float, float, float, np.ndarray):
+    """
+    Validation loop for SealNet Object Detection / Instance segmentation models. Gets instance-level
+    precision, recall and F-1 score, comparable with U-Net results.
+
+    :param net: pytorch model
+    :param val_loader: validation dataloader
+    :param device: pytorch device
+
+    :return: f-1 score, precision, recall and a grid of outputs for logging, respectively.
+    """
     tp = 0
     fp = 0
     fn = 0
@@ -50,9 +65,12 @@ def validate_maskrcnn(net, val_loader, device):
                     for k, v in p.items()
                     if k == "boxes"
                 ]
+
+                # Extract polygons from predicted and GT bboxes
                 gt_pols = [bbox_to_pol(*bbox) for ele in gt_boxes for bbox in ele]
                 pred_pols = [bbox_to_pol(*bbox) for ele in pred_boxes for bbox in ele]
 
+                # Match bbox polygons with GT
                 tp_batch, fp_batch, fn_batch = match_bbox_pols(gt_pols, pred_pols)
                 tp += tp_batch
                 fp += fp_batch
@@ -62,9 +80,13 @@ def validate_maskrcnn(net, val_loader, device):
     recall = tp / (tp + fn + eps)
     f1 = 2 * (precision * recall / (precision + recall + eps))
 
+    # Create a visualization of the outputs
     output = net(images)
-    output_grid = create_vizualization_grid(images=images, outputs=output, targets=targets)
+    output_grid = create_vizualization_grid(
+        images=images, outputs=output, targets=targets
+    )
 
+    # Revert model to training mode
     net.train()
     return f1, precision, recall, output_grid
 
@@ -93,9 +115,7 @@ def test_maskrcnn(
     :param num_workers: number of workers for dataloader
     :param batch_size: batch size for dataloader
     :param ground_truth_gdf: path to shapefile with groundtruth points
-    :param threshold: threshold for binarizing output masks (applied after sigmoid transform)
     :param nms_distance: distance for non-maximum supression removal of redundant poitnts
-    :param cutoffs: cutoffs for using regression predictions to remove false positives
     :param amp: use auto-mixed precision?
     """
 
@@ -131,7 +151,6 @@ def test_maskrcnn(
     pred_counts = []
 
     # Loop through dataloader
-
     for images, image_names in test_loader:
 
         images = list(image.to(device) for image in images)
@@ -160,15 +179,14 @@ def test_maskrcnn(
                         if k == "masks"
                     ]
 
+                    # Store support from mask
                     support_mask = {
                         idx: [mask.sum() for mask in ele]
                         for idx, ele in enumerate(pred_masks)
                     }
 
-                support_box = {
-                    idx: ele
-                    for idx, ele in enumerate(pred_box_scores)
-                }
+                # Store support from bbox
+                support_box = {idx: ele for idx, ele in enumerate(pred_box_scores)}
 
                 centroids = {
                     idx: [((box[0] + box[2]) / 2, (box[1] + box[3]) / 2) for box in ele]
@@ -196,15 +214,11 @@ def test_maskrcnn(
                             x, y = centroid
 
                             # Add support for point from bbox
-                            pred_points_support_box.append(
-                                support_box[idx][idx2]
-                            )
+                            pred_points_support_box.append(support_box[idx][idx2])
 
                             # Add support for point from mask, if available
                             if "masks" in outputs[0]:
-                                pred_points_support_mask.append(
-                                    support_mask[idx][idx2]
-                                )
+                                pred_points_support_mask.append(support_mask[idx][idx2])
 
                             pred_counts.append(len(centroids[idx]))
 

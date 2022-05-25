@@ -99,17 +99,41 @@ def match_points(
     return tp, fp, fn
 
 
-def bbox_to_pol(xmin, ymin, xmax, ymax):
+def bbox_to_pol(xmin: float, ymin: float, xmax: float, ymax: float) -> Polygon:
+    """
+    Creates shapely Polygons from bounding boxes.
+
+    :param xmin: bbox left
+    :param ymin: bbox down
+    :param xmax: bbox right
+    :param ymax: bbox top
+
+    :return: Polygon representation of bbox
+    """
     return Polygon([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
 
 
-def match_bbox_pols(gt_pols, pred_pols, min_iou_match: float = 0.5):
+def match_bbox_pols(
+    gt_pols: List[Polygon], pred_pols: List[Polygon], min_iou_match: float = 0.5
+) -> (int, int, int):
+    """
+    Matches ground-truth and predicted bbox polygons.
+
+    :param gt_pols: list with GT polygons
+    :param pred_pols: list with pred polygons
+    :param min_iou_match: minimum IoU for considering two polygons a match
+
+    :return: true positives, false positives and false negatives, respectively.
+    """
     matched = set([])
     for idx_true, true_pol in enumerate(gt_pols):
         for idx_pred, pred_pol in enumerate(pred_pols):
             if idx_pred in matched:
                 continue
-            if true_pol.intersection(pred_pol).area / true_pol.union(pred_pol).area > min_iou_match:
+            if (
+                true_pol.intersection(pred_pol).area / true_pol.union(pred_pol).area
+                > min_iou_match
+            ):
                 matched.add(idx_pred)
                 break
 

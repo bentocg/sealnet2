@@ -1,3 +1,4 @@
+import gc
 import logging
 import os
 import uuid
@@ -152,22 +153,24 @@ def train_net(
     amp: bool = False,
 ) -> float:
     """
+    Training/validation loop for MaskRCNN / FasterCNN.
 
-    :param net:
-    :param device:
-    :param experiment_id:
-    :param training_dir:
-    :param epochs:
-    :param batch_size:
-    :param patch_size:
-    :param num_workers:
-    :param learning_rate:
-    :param patience:
-    :param decay_factor:
-    :param neg_to_pos_ratio:
-    :param augmentation_mode:
-    :param amp:
-    :return:
+    :param net: pytorch model
+    :param device: device for model / data
+    :param experiment_id: experiment id for wandb logging
+    :param training_dir: directory with training set
+    :param epochs: maximum number of training epochs before switching to test
+    :param batch_size: batch size for training, doubled for validation
+    :param patch_size: patch size for training images
+    :param num_workers: number of workers for dataloaders
+    :param learning_rate: learning rate for optimizer
+    :param patience: number of epochs of non-improving until learning rate is decreased
+    :param decay_factor: multiplier for decreasing learning rate
+    :param val_rounds_per_epoch: number of validation rounds for each training epoch
+    :param augmentation_mode: use simple or complex augmentations?
+    :param amp: use auto-mixed-precision?
+
+    :return: instance f-1 score for validation
     """
     # Create train loader
     train_loader = DataLoader(
@@ -198,7 +201,6 @@ def train_net(
     )
 
     n_train = len(train_loader) * batch_size
-    n_val = len(val_loader) * batch_size * 2
 
     # Initialize logging
     experiment = wandb.init(
@@ -233,8 +235,7 @@ def train_net(
            Model architecture: {args.model_architecture}
            Num workers: {num_workers}
            Augmentation mode: {augmentation_mode}
-           Mixed Precision: {amp}
-           
+           Mixed Precision: {amp}    
        """
     )
 
@@ -303,7 +304,9 @@ def train_net(
                         del losses
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
+                        gc.collect()
 
+                        # Run validation
                         with torch.cuda.amp.autocast(enabled=amp):
                             (
                                 val_f1,
@@ -313,6 +316,7 @@ def train_net(
                             ) = validate_maskrcnn(net, val_loader, device)
                             scheduler.step(val_f1)
 
+                            # Log validation results
                             experiment.log(
                                 {
                                     "learning rate": optimizer.param_groups[0]["lr"],
@@ -325,10 +329,12 @@ def train_net(
                                 }
                             )
 
+                            # Store best validation results and reset non-improving counter
                             if val_f1 > best_f1:
                                 best_f1 = val_f1
                                 non_improving = 0
 
+                            # Early stop if validation f1 does not improve for n validation rounds
                             else:
                                 non_improving += 1
                                 if non_improving > 3 * val_rounds_per_epoch:
