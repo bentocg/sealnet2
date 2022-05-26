@@ -166,11 +166,13 @@ def test_unet(
     pred_points_support = []
     pred_points = []
     pred_point_scenes = []
+    pred_points_distance_from_center = []
+    pred_points_tile_ids = []
     pred_counts = []
 
     # Loop through dataloader
 
-    for images, image_names in test_loader:
+    for batch_idx, images, image_names in enumerate(test_loader):
 
         images = images.to(device)
         with torch.cuda.amp.autocast(enabled=amp):
@@ -218,11 +220,22 @@ def test_unet(
                                 ].sum()
                             )
 
+                            # Get distance from center of the tile
+                            distance_from_center = np.linalg.norm(
+                                np.array([x, y]) -
+                                np.array(
+                                    [outputs[idx].shape[-1] // 2,
+                                     outputs[idx].shape[-1] // 2],
+                                ),
+                            )
+                            pred_points_distance_from_center.append(distance_from_center)
+
                             # Add scene coordinates from patch filename and project with transforms
                             x, y = x + int(down), y + int(left)
                             pred_points.append(Point(*((x, y) * transform_scene)))
                             pred_counts.append(counts[idx])
                             pred_point_scenes.append(scene)
+                            pred_points_tile_ids.append(f"{batch_idx}_{idx}")
 
     # Add points to shapefile
     preds_gdf = gpd.GeoDataFrame(
@@ -231,6 +244,8 @@ def test_unet(
             "scene": pred_point_scenes,
             "support": pred_points_support,
             "pred_count": pred_counts,
+            "distance_from_center": pred_points_distance_from_center,
+            "tile_id": pred_points_tile_ids,
             "ids": list(range(len(pred_points))),
         },
         crs=from_epsg(3031),

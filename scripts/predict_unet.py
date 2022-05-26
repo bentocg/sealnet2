@@ -126,6 +126,7 @@ def predict_unet(
     pred_points_support = []
     pred_points = []
     pred_counts = []
+    tile_image_names = []
     pred_points_distance_from_center = []
 
     for images, image_names in test_loader:
@@ -162,13 +163,17 @@ def predict_unet(
 
                             # Get distance from center of the tile
                             distance_from_center = np.linalg.norm(
-                                np.array([x, y]) -
-                                np.array(
-                                    [outputs[idx].shape[-1] // 2,
-                                     outputs[idx].shape[-1] // 2],
+                                np.array([x, y])
+                                - np.array(
+                                    [
+                                        outputs[idx].shape[-1] // 2,
+                                        outputs[idx].shape[-1] // 2,
+                                    ],
                                 ),
                             )
-                            pred_points_distance_from_center.append(distance_from_center)
+                            pred_points_distance_from_center.append(
+                                distance_from_center
+                            )
 
                             # Add support for point
                             pred_points_support.append(
@@ -187,6 +192,7 @@ def predict_unet(
                             x, y = x + int(down), y + int(left)
                             pred_points.append(Point(*((x, y) * transforms)))
                             pred_counts.append(counts[idx])
+                            tile_image_names.append(image_names[idx])
 
     # Add points to shapefile
     preds_gdf = gpd.GeoDataFrame(
