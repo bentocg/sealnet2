@@ -5,6 +5,7 @@ import sys
 from collections import OrderedDict
 
 import affine
+import fiona
 import numpy as np
 import rasterio
 import torch
@@ -14,6 +15,7 @@ from shapely.geometry import Point
 from torch.utils.data import DataLoader
 import geopandas as gpd
 from segmentation_models_pytorch import Unet
+from rasterio.mask import mask
 
 sys.path.insert(0, "../")
 
@@ -82,6 +84,14 @@ def parse_args():
         type=int,
         default=20,
         help="Batch size",
+    )
+    parser.add_argument(
+        "--sea-mask-shape",
+        "-sm",
+        dest="sea_mask_shape",
+        type=str,
+        nargs='?',
+        help="Path to sea mask shapefile"
     )
     return parser.parse_args()
 
@@ -231,13 +241,22 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
+
     # Tile image
     scene = os.path.basename(args.input_raster)
     temp_dir = f"temp_output_{scene}"
     with rasterio.open(args.input_raster) as src:
         transforms = src.transform
+
+        # Mask out land
+        if args.sea_mask_shape:
+            with fiona.open(args.sea_mask_shape, "r") as shapefile:
+                land_shapes = [feature["geometry"] for feature in shapefile]
+                img, _ = mask(src, shapes=land_shapes)
+
         tile_image(
-            img=src.read([1]),
+            img=img,
             patch_size=args.patch_size,
             stride=args.stride,
             out_dir=temp_dir,
