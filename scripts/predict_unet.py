@@ -93,6 +93,14 @@ def parse_args():
         nargs='?',
         help="Path to sea mask shapefile"
     )
+    parser.add_argument(
+        "--num-workers",
+        "-w",
+        dest="num_workers",
+        type=int,
+        default=1,
+        help="Number of workers for dataloaders"
+    )
     return parser.parse_args()
 
 
@@ -288,7 +296,7 @@ if __name__ == "__main__":
         device=device,
         net=net,
         input_dir=temp_dir,
-        num_workers=1,
+        num_workers=args.num_workers,
         transforms=transforms,
         batch_size=args.batch_size,
     )
