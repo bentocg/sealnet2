@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
     # Tile image
     scene = os.path.basename(args.input_raster)
-    temp_dir = f"temp_output_{scene}"
+    temp_dir = f"{args.out_dir}/temp_output_{scene}"
     with rasterio.open(args.input_raster) as src:
         transforms = src.transform
 
